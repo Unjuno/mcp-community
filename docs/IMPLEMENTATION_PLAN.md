@@ -5,7 +5,7 @@ Architecture: Hono and MCP adapters call the same authorized services. Trusted e
 
 ## Audit and environment
 
-The remote repository was empty (contents 404, history 409). README initialized main; all implementation is on feat/mvp-foundation. No license or existing code was present. GitHub connector is authorized for changes. Local outbound DNS is unavailable; official dependencies and Node 24.22.2 were obtained from successful GitHub Actions run 42163595307. Tests will run locally against that exact offline toolchain, then again in GitHub Actions.
+The remote repository was empty (contents 404, history 409). README initialized main; all implementation is on feat/mvp-foundation. No license or existing code was present. GitHub connector is authorized for changes. Local outbound DNS is unavailable; official dependencies and Node 24.22.2 were obtained from successful GitHub Actions run 42163595307. Tests were executed locally against that offline toolchain and again in GitHub Actions.
 
 ## Phase ledger
 
@@ -15,8 +15,8 @@ The remote repository was empty (contents 404, history 409). README initialized 
 - [x] Phase 3: official MCP v2 tools/resources and real-client HTTP tests.
 - [x] Phase 4: knowledge revisions, proposals, conflict detection and human approval.
 - [x] Phase 5: external extension contract, registry and sample.
-- [x] Phase 6: upgrade, restore, authorization checks (dependency vulnerability scanning pending network CI).
-- [ ] Phase 7: operator/developer guides, final tests and pull request (local guides complete; remote publication/CI outstanding).
+- [x] Phase 6: upgrade, restore, authorization checks, dependency audit and Docker build verified by GitHub CI.
+- [x] Phase 7: operator/developer guides, final tests, source publication and PR #1 (external developer trial remains pending).
 
 ## Verification rules
 
@@ -44,4 +44,6 @@ Phase 4: seven RED knowledge/proposal tests preceded implementation. 29/29 local
 
 Phase 5: typed extension contract and manifest, explicit local enablement, namespace/scope/schema validation, example package and real MCP-client invocation. Five extension contract tests PASS; disabled plugins do not appear in runtime registry. The local loader has no upload endpoint. Review before installing any package; execution is in-process.
 
-Phase 6: SQLite backup API and `db:backup` CLI, upgrade/restore migration tests and extension tool access on a restored DB. Two upgrade tests PASS. Local package audit and Docker build require network and Docker runner, respectively; **UNCERTAIN** until GitHub CI completes. Static token + Node 24 support; no OAuth claim.
+Phase 6: SQLite backup API and `db:backup` CLI, upgrade/restore migration tests and extension tool access on a restored DB. Two upgrade tests PASS. GitHub Actions CI run 42168390881 passed `npm ci`, `npm run typecheck`, `npm run lint`, `npm test` (36/36), `npm audit --audit-level=high`, and `docker compose build`. Local Docker is unavailable; no public deployment performed. Static token + Node 24 support; no OAuth claim.
+
+Phase 7: README, AGENTS, CONTRIBUTING, SECURITY, Apache-2.0 LICENSE, extension and architecture guides delivered. GitHub branch `feat/mvp-foundation` synchronized without force; [Pull Request #1](https://github.com/Unjuno/mcp-community/pull/1) opened. Local live-process smoke: `GET /health` = 200, anonymous `/` = 303, `/login` = 200, uncredentialed `POST /mcp` = 401. GitHub CI [run 42168390881](https://github.com/Unjuno/mcp-community/actions/runs/42168390881) passed. Technical MVP acceptance: **PASS**. External independent-developer usability (three participants within 90 minutes): **UNCERTAIN / not performed**. Production hardening and user adoption are not certified.
