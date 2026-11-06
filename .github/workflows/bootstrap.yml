@@ -1,0 +1,33 @@
+name: Dependency bootstrap
+on:
+  push:
+    branches: [feat/mvp-foundation]
+    paths: ['.github/workflows/bootstrap.yml']
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Resolve official dependencies and record versions
+        run: |
+          mkdir -p /tmp/mcp-kit
+          cd /tmp/mcp-kit
+          npm init -y
+          npm install --save-exact @modelcontextprotocol/server @modelcontextprotocol/client @modelcontextprotocol/hono @hono/node-server hono zod drizzle-orm better-sqlite3 semver diff
+          npm install --save-dev --save-exact typescript tsx vitest @types/node@24 @types/better-sqlite3 @types/semver @types/diff @biomejs/biome
+          node --version | tee node-version.txt
+          npm ls --depth=0 | tee dependency-versions.txt
+          node --input-type=module -e "import {McpServer} from '@modelcontextprotocol/server'; console.log('Official v2 McpServer:', typeof McpServer)"
+          cp "$(command -v node)" ./node
+          tar -czf /tmp/mcp-development-kit.tar.gz node node_modules package.json package-lock.json node-version.txt dependency-versions.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-development-kit
+          path: /tmp/mcp-development-kit.tar.gz
+          retention-days: 1
