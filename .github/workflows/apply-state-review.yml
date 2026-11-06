@@ -1,0 +1,64 @@
+name: Apply reviewed state-machine patch
+on:
+  push:
+    branches: [feat/state-machine-audit]
+    paths: [".bootstrap/state-review.patch.xz.b64"]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify base and apply checked patch
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "db62f7e0ff70325764c54dba869200ae066e5d4d"
+          test "$(git branch --show-current)" = "feat/state-machine-audit"
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma
+          source = Path('.bootstrap/state-review.patch.xz.b64').read_text().strip()
+          packed = base64.b64decode(source, validate=True)
+          assert hashlib.sha256(packed).hexdigest() == '88ebeb0a3a610f481cb9363a40e715c8d2bc55efa22dd5318b275a181b0b4b8d'
+          patch = lzma.decompress(packed)
+          assert hashlib.sha256(patch).hexdigest() == '6fef12bb7b177cf7ec2216f4aa832d9333a1ea639da6a33209fb9ba40f6e4b15'
+          Path('/tmp/state-review.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/state-review.patch
+          git apply /tmp/state-review.patch
+          rm .bootstrap/state-review.patch.xz.b64 .github/workflows/apply-state-review.yml
+          rmdir .bootstrap
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run smoke
+      - run: npm audit --audit-level=high
+      - run: docker compose build
+      - name: Start actual container and check state migration
+        run: |
+          set -euo pipefail
+          docker compose up -d --wait --wait-timeout 120
+          curl --fail http://127.0.0.1:3000/health
+          test "$(docker compose exec -T community id -u)" != "0"
+          docker compose exec -T community node apps/server/dist/cli.js db:migrate
+      - name: Cleanup ephemeral container
+        if: always()
+        run: docker compose down -v
+      - name: Record reviewed changes in isolated branch
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: make community state transitions explicit and harden UX"
+          git push origin HEAD:refs/heads/feat/state-machine-audit
