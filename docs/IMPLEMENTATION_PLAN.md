@@ -65,8 +65,8 @@ This is a backward-compatible review of the existing MVP, not a new feature tier
 - [x] Emit proposal-resolution and knowledge-update outbox rows in one approval transaction.
 - [x] Improve Web accessibility and state-aware review without an SPA or new runtime dependency.
 - [x] Write `docs/STATE_MACHINES.md` and `docs/ARCHITECTURE_REVIEW.md`.
-- [ ] Record current review branch CI (typecheck, lint, tests, smoke, migration, container).
+- [x] Record current review branch CI (typecheck, lint, tests, smoke, migration, container): [run 42247744336](https://github.com/Unjuno/mcp-community/actions/runs/42247744336), **62/62 PASS**.
 - [ ] External security review and 3-developer usability experiment (outside automated scope).
 
 The prior local **47 tests** were retained, plus new lifecycle and Web accessibility tests.
-The review's measured test results and unresolved gates must be updated after CI; do not label an unexecuted test PASS.
+GitHub Actions confirmed **62/62 tests** across 9 files, Node 24 typecheck, Biome, MCP/extension/backup smoke, high-severity dependency audit, Docker build and live non-root container migration. The three-developer usability study, independent security assessment, and production deployment remain **UNCERTAIN / NOT RUN**.
