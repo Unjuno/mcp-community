@@ -117,7 +117,7 @@ npm test
 npm run audit:deps
 ```
 
-The tests include **real MCP v2 client/server over HTTP**, web session/CSRF/XSS, knowledge review/restore, extension scope/version checks, backup and migration. See `docs/IMPLEMENTATION_PLAN.md` for evidence and unfinished checks. Run `npm run smoke` to test the compiled server, CLI setup/demo, official MCP client, sample extension and backup/restore in an isolated temporary database. CI also checks actual container startup. [CI run 42168390881](https://github.com/Unjuno/mcp-community/actions/runs/42168390881) passed all required steps on GitHub Actions; local Docker and online audit could not be run in the isolated development container. To contribute, read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+The tests include **real MCP v2 client/server over HTTP**, web session/CSRF/XSS, knowledge review/restore, extension scope/version checks, backup and migration. See `docs/IMPLEMENTATION_PLAN.md` for evidence and unfinished checks. Run `npm run smoke` to test the compiled server, CLI setup/demo, official MCP client, sample extension and backup/restore in an isolated temporary database. CI also checks actual container startup. [Security-review CI run 42170616858](https://github.com/Unjuno/mcp-community/actions/runs/42170616858) passed 47 tests, typecheck, lint, compiled MCP smoke, dependency audit, Docker build, container startup, non-root and migration checks. Production hardening and independent security review remain separate requirements. To contribute, read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
 
 ## Known limitations
 
