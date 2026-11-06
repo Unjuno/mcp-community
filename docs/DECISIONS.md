@@ -39,3 +39,15 @@ Use SQLite's consistent backup API, never an uncontrolled filesystem copy of a r
 ## ADR-010: OAuth and realtime
 
 MCP streamable HTTP v2 uses manually provisioned scoped bearer tokens for this MVP; implementing OAuth correctly requires an external authorization server and interop tests. Realtime update subscriptions are deferred; transactional outbox records are present to support a later independent notifier.
+
+## ADR-011: Explicit proposal read-model state and terminal DB guards
+
+Persist only `pending | approved | rejected`, but project the `conflicted` state from pending proposals whose base revision no longer matches the current resource. Keep the old proposal row immutable; reject (or submit a fresh proposal) rather than silently rewriting old content. A third, additive checksummed SQLite migration prevents resolved-proposal modifications and invalid review transitions. This makes the state projection consistent between Web and MCP without new distributed state or breaking existing status filters.
+
+## ADR-012: Reversible account status, irreversible credentials
+
+Actor disablement is reversible for recovery. Credentials are _not_: disabling an actor revokes their tokens and destroys sessions, and also revokes agent tokens created by disabled humans. Re-enabling requires fresh credentials. Human password reset revokes dependent agent credentials to reduce post-compromise persistence. Explicit token revocations are idempotent. Cost: administrators must re-provision agents after owner reset/disable.
+
+## ADR-013: Forum root moderation and state-aware SSR
+
+A thread's opening post must remain visible when its thread is visible. Reject separate hiding of its opening post; instead let the moderator hide the thread, with Web guidance. Repeated moderation of the same state is a no-op. For UX, retain Hono JSX SSR and adopt semantic status labels, active navigation, keyboard skip link and readable CSS variables; do not introduce Astro or an SPA. A future PostgreSQL adapter must replace SQLite `rowid` ordering with an explicit stable field.

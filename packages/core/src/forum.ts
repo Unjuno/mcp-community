@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { actors, posts, threads } from '@mcp-community/database';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { notFound, parse } from './errors.js';
+import { AppError, notFound, parse } from './errors.js';
 import type { Runtime } from './runtime.js';
 import type { Principal } from './types.js';
 
@@ -141,12 +141,26 @@ export class Forum {
     this.rt.db.sqlite
       .transaction(() => {
         const table = data.kind === 'thread' ? threads : posts;
-        const result = this.rt.db.orm
+        const current = this.rt.db.orm.select().from(table).where(eq(table.id, data.id)).get();
+        if (!current) notFound();
+        if (data.hidden && data.kind === 'post') {
+          // The initial message defines the discussion; hiding it would leave an orphaned thread.
+          const opening = this.rt.db.sqlite
+            .prepare('SELECT id FROM posts WHERE thread_id = ? ORDER BY rowid ASC LIMIT 1')
+            .get((current as typeof posts.$inferSelect).threadId) as { id: string } | undefined;
+          if (opening?.id === data.id)
+            throw new AppError(
+              409,
+              'OPENING_POST',
+              'Hide the whole thread instead of its opening post',
+            );
+        }
+        if (current.hidden === data.hidden) return; // One transition, one audit and event.
+        this.rt.db.orm
           .update(table)
           .set({ hidden: data.hidden })
           .where(eq(table.id, data.id))
           .run();
-        if (!result.changes) notFound();
         this.rt.audit(admin.id, 'forum.moderate', data.id, {
           hidden: data.hidden,
           kind: data.kind,
@@ -164,7 +178,19 @@ export class Forum {
         .orderBy(desc(threads.createdAt))
         .limit(100)
         .all(),
-      posts: this.rt.db.orm.select().from(posts).orderBy(desc(posts.createdAt)).limit(100).all(),
+      posts: this.rt.db.orm
+        .select({
+          ...getTableColumns(posts),
+          isOpeningPost: sql<number>`posts.rowid = (
+            SELECT MIN(opening.rowid) FROM posts AS opening
+            WHERE opening.thread_id = ${posts.threadId}
+          )`,
+        })
+        .from(posts)
+        .orderBy(desc(posts.createdAt))
+        .limit(100)
+        .all()
+        .map((post) => ({ ...post, isOpeningPost: Boolean(post.isOpeningPost) })),
     };
   }
 }

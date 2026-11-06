@@ -12,6 +12,7 @@ export * from './extensions.js';
 export * from './forum.js';
 export type { SessionState } from './identity.js';
 export * from './knowledge.js';
+export * from './state-machines.js';
 export * from './types.js';
 
 export class Community {

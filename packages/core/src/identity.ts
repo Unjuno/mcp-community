@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { actors, sessions, tokens, users } from '@mcp-community/database';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { hashPassword, hashSecret, secret, verifyPassword } from './crypto.js';
 import { AppError, notFound, parse } from './errors.js';
 import type { Runtime } from './runtime.js';
+import { credentialState } from './state-machines.js';
 import { DEFAULT_AGENT_SCOPES, type Principal } from './types.js';
 
 const humanInput = z.strictObject({
@@ -179,7 +180,7 @@ export class Identity {
       .from(tokens)
       .where(eq(tokens.hash, hashSecret(raw)))
       .get();
-    if (!token || token.revokedAt !== null || token.expiresAt <= this.rt.now())
+    if (!token || credentialState(token.expiresAt, token.revokedAt, this.rt.now()) !== 'active')
       throw new AppError(401, 'INVALID_TOKEN', 'Invalid access token');
     const principal: Principal = {
       actorId: token.actorId,
@@ -194,6 +195,30 @@ export class Identity {
     }
     return principal;
   }
+  /** Credential invalidation is terminal even if an actor is later re-enabled. */
+  private invalidateCredentials(actorIds: string[]) {
+    if (!actorIds.length) return;
+    this.rt.db.orm.delete(sessions).where(inArray(sessions.actorId, actorIds)).run();
+    this.rt.db.orm
+      .update(tokens)
+      .set({ revokedAt: this.rt.now() })
+      .where(and(inArray(tokens.actorId, actorIds), isNull(tokens.revokedAt)))
+      .run();
+  }
+
+  /** Disabling or resetting a human also revokes credentials of agents they provisioned. */
+  private dependentActors(actorId: string): string[] {
+    return [
+      actorId,
+      ...this.rt.db.orm
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.ownerId, actorId))
+        .all()
+        .map((actor) => actor.id),
+    ];
+  }
+
   async resetPassword(principal: Principal | null, input: unknown) {
     const admin = this.rt.admin(principal);
     const data = parse(
@@ -210,7 +235,7 @@ export class Identity {
           .where(eq(users.actorId, data.actorId))
           .run();
         if (!updated.changes) notFound();
-        this.rt.db.orm.delete(sessions).where(eq(sessions.actorId, data.actorId)).run();
+        this.invalidateCredentials(this.dependentActors(data.actorId));
         this.rt.audit(admin.id, 'identity.reset_password', data.actorId);
       })
       .immediate();
@@ -222,14 +247,20 @@ export class Identity {
       throw new AppError(400, 'SELF_DISABLE', 'An administrator cannot disable their own account');
     this.rt.db.sqlite
       .transaction(() => {
-        const changed = this.rt.db.orm
+        this.rt.admin(principal);
+        const current = this.rt.db.orm
+          .select()
+          .from(actors)
+          .where(eq(actors.id, data.actorId))
+          .get();
+        if (!current) notFound();
+        if (current.disabled === data.disabled) return; // No transition, no redundant audit.
+        this.rt.db.orm
           .update(actors)
           .set({ disabled: data.disabled })
           .where(eq(actors.id, data.actorId))
           .run();
-        if (!changed.changes) notFound();
-        if (data.disabled)
-          this.rt.db.orm.delete(sessions).where(eq(sessions.actorId, data.actorId)).run();
+        if (data.disabled) this.invalidateCredentials(this.dependentActors(data.actorId));
         this.rt.audit(admin.id, 'identity.set_disabled', data.actorId, { disabled: data.disabled });
       })
       .immediate();
@@ -241,10 +272,11 @@ export class Identity {
       .transaction(() => {
         const token = this.rt.db.orm.select().from(tokens).where(eq(tokens.id, tokenId)).get();
         if (!token) notFound();
+        if (token.revokedAt !== null) return; // Terminal transition; idempotent for retries.
         this.rt.db.orm
           .update(tokens)
           .set({ revokedAt: this.rt.now() })
-          .where(eq(tokens.id, tokenId))
+          .where(and(eq(tokens.id, tokenId), isNull(tokens.revokedAt)))
           .run();
         this.rt.audit(admin.id, 'identity.revoke_token', tokenId);
       })

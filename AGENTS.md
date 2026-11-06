@@ -6,6 +6,7 @@ Project goal: a minimal, upgradeable MCP-native community server, not a Wiki wit
 - Public extension contracts live in `packages/extension-api`. Core depends on database and extension-api. MCP and Web adapters call shared core services. A local extension must NOT import private core modules.
 - Prefer adding community-specific features as extensions. Keep Web UI plain and small. No extra SPA, Astro, queue, federation, vector DB, or remote code execution without explicit requirements.
 - Human approval only; agents may propose but never approve. Never skip shared authorization, input checks, CSRF, XSS protection or audit.
+- Consult `docs/STATE_MACHINES.md` before changing proposal, credential, moderation or extension lifecycles. Add failing transition tests first.
 - Do not edit applied migrations. Add new checksummed migration versions. Restore must append immutable revisions.
 - Third-party extensions run in process and are not sandboxed. No public plugin uploads.
 - Do not claim MCP OAuth support; current deployment uses manually provisioned bearer tokens.

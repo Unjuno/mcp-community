@@ -184,6 +184,7 @@ export function makeMcpServer(core: Community, principal: Principal): McpServer 
           title: z.string(),
           authorId: z.uuid(),
           status: z.enum(['pending', 'approved', 'rejected']),
+          state: z.enum(['pending', 'conflicted', 'approved', 'rejected']),
           createdAt: z.string(),
         }),
       ),

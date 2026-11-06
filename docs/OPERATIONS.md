@@ -28,3 +28,9 @@ Take a backup and preserve extension configuration. Review release notes and dep
 Use TLS termination with `NODE_ENV=production` and an exact HTTPS `APP_ORIGIN`; preserve Host. The app intentionally does not trust arbitrary `X-Forwarded-For`. Rate limits use socket peer IP and actor identity. Reverse-proxy users can share a peer bucket; configure additional per-client limits in a trusted proxy and verify expected traffic. Do not expose SQLite, backup paths, environment files or administrative commands.
 
 MCP credentials are manually provisioned expiring scoped bearer tokens, not OAuth. Do not put token values in Git, issue descriptions or command-line URLs. Use the client secret store. No old-protocol fallback is offered.
+
+## State-machine upgrade notes (migration 3)
+
+Back up with the CLI before upgrading. SQLite migration 3 installs proposal transition guards without altering historical data. Approved/rejected proposals cannot be reopened by direct SQL; approval/rejection records require a reviewer and review timestamp. Old proposals whose base revision is outdated are shown as **Conflicted** in the Web UI/MCP, but their persisted `status` stays `pending` until a human administrator explicitly rejects them.
+
+Disabling an actor or resetting an owner's password now revokes the affected tokens, including those owned by that human's agents. Reactivation does **not** reactivate tokens: issue fresh agent tokens and distribute them securely. See [State machines](STATE_MACHINES.md) and test these transitions in staging before production use.
