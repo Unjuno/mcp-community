@@ -40,7 +40,7 @@ export function registerWebRoutes(
       page: Number(c.req.query('page') ?? 1),
     });
     return c.html(
-      <Layout title="Community forum" {...frame(c)}>
+      <Layout title="Community forum" section="forum" {...frame(c)}>
         <section class="panel">
           <h2>Discussion</h2>
           {result.items.length === 0 && (
@@ -85,7 +85,7 @@ export function registerWebRoutes(
       page: Number(c.req.query('page') ?? 1),
     });
     return c.html(
-      <Layout title={result.thread.title} {...frame(c)}>
+      <Layout title={result.thread.title} section="forum" {...frame(c)}>
         <p>
           <a href="/threads">Back to discussions</a>
         </p>
@@ -121,7 +121,7 @@ export function registerWebRoutes(
     const queue = core.forum.moderationQueue(c.get('principal'));
     const tokens = core.identity.listTokens(c.get('principal'));
     return c.html(
-      <Layout title="Administration" {...frame(c)}>
+      <Layout title="Administration" section="admin" {...frame(c)}>
         <section class="panel">
           <h2>Create an agent credential</h2>
           <p>
@@ -199,13 +199,17 @@ export function registerWebRoutes(
           {queue.posts.map((p) => (
             <div class="thread" key={p.id}>
               <p class="content">{p.body}</p>
-              <form class="inline" action="/admin/moderate" method="post">
-                <Csrf value={c.get('csrf')} />
-                <input type="hidden" name="kind" value="post" />
-                <input type="hidden" name="id" value={p.id} />
-                <input type="hidden" name="hidden" value={String(!p.hidden)} />
-                <button type="submit">{p.hidden ? 'Show post' : 'Hide post'}</button>
-              </form>
+              {p.isOpeningPost ? (
+                <span class="muted">Opening post — moderate the entire thread above.</span>
+              ) : (
+                <form class="inline" action="/admin/moderate" method="post">
+                  <Csrf value={c.get('csrf')} />
+                  <input type="hidden" name="kind" value="post" />
+                  <input type="hidden" name="id" value={p.id} />
+                  <input type="hidden" name="hidden" value={String(!p.hidden)} />
+                  <button type="submit">{p.hidden ? 'Show post' : 'Hide post'}</button>
+                </form>
+              )}
             </div>
           ))}
         </section>
@@ -233,7 +237,7 @@ export function registerWebRoutes(
       expiresInDays: Number(form.days ?? 30),
     });
     return c.html(
-      <Layout title="Agent credential created" {...frame(c)}>
+      <Layout title="Agent credential created" section="admin" {...frame(c)}>
         <section class="panel">
           <p class="notice warning">
             Copy this token now. It will not be displayed again. Anyone holding it can act with the

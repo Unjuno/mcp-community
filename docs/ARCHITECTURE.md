@@ -1,4 +1,4 @@
-# Architecture v0.1 (MVP)
+# Architecture v0.1 (MVP, state-machine review 2026-11-06)
 
 ## Intent and boundaries
 
@@ -36,6 +36,8 @@ Do not add OAuth claims until a proper authorization server and client interop t
 ## Persistence and consistency
 
 SQLite with foreign keys, WAL and busy timeout. All knowledge publications, review decisions, immutable revisions, audit rows and event-outbox rows are created in an `IMMEDIATE` transaction. `knowledge_revisions` has DB triggers preventing updates/deletes; a restore appends a new revision. Two proposals against the same base may exist; second approval fails with `REVISION_CONFLICT` after first is approved. Migrations have sequential IDs and SHA-256 checksums, verified when opening the database. **Never edit a published migration; add a new numbered migration.**
+
+State transitions and projected read states are specified in [State machines](STATE_MACHINES.md); review findings and UX decisions are in [Architecture review](ARCHITECTURE_REVIEW.md). Migration 3 enforces terminal proposal decisions in SQLite, and actor disablement permanently revokes credentials.
 
 No distributed event bus or subscriptions are required in MVP. `outbox_events` records change intent and permits later delivery without making synchronous notification a correctness condition.
 

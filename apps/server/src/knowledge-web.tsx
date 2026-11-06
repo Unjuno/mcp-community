@@ -2,7 +2,7 @@ import type { Community } from '@mcp-community/core';
 import { diffLines } from 'diff';
 import type { Context, Hono } from 'hono';
 import type { WebEnvironment } from './app.js';
-import { Csrf, Layout, Pager, Time } from './views.js';
+import { Csrf, Layout, Pager, ProposalStateBadge, Time } from './views.js';
 
 function ContentFields(props: { title?: string; body?: string; sources?: string[] }) {
   return (
@@ -41,7 +41,7 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
     });
     const common = frame(c);
     return c.html(
-      <Layout title="Reviewed knowledge" {...common}>
+      <Layout title="Reviewed knowledge" section="knowledge" {...common}>
         <section class="panel">
           <p>
             Authoritative resources are separate from discussion. Propose changes for human review.
@@ -86,7 +86,7 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
     const current = core.knowledge.get(c.get('principal'), { id });
     const common = frame(c);
     return c.html(
-      <Layout title={`History: ${current.title}`} {...common}>
+      <Layout title={`History: ${current.title}`} section="knowledge" {...common}>
         <section class="panel">
           <a href={`/knowledge/${id}`}>Current resource</a>
           <p>Restoring a version appends a new revision; existing history is immutable.</p>
@@ -137,7 +137,7 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
     const resource = core.knowledge.get(c.get('principal'), { id: c.req.param('id') });
     const common = frame(c);
     return c.html(
-      <Layout title={resource.title} {...common}>
+      <Layout title={resource.title} section="knowledge" {...common}>
         <section class="panel">
           <p class="meta">
             Revision {resource.currentRevision} · <Time value={resource.updatedAt} /> ·{' '}
@@ -189,15 +189,15 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
       page: Number(c.req.query('page') ?? 1),
     });
     return c.html(
-      <Layout title="Change proposals" {...frame(c)}>
+      <Layout title="Change proposals" section="proposals" {...frame(c)}>
         <section class="panel">
           {result.items.length === 0 && <p>No proposals yet.</p>}
           {result.items.map((p) => (
             <article class="thread" key={p.id}>
               <a href={`/proposals/${p.id}`}>{p.title}</a>
               <p class="meta">
-                {p.status} · {p.resourceId} · base revision {p.baseRevision} ·{' '}
-                <Time value={p.createdAt} />
+                <ProposalStateBadge state={p.state} /> · {p.resourceId} · base revision{' '}
+                {p.baseRevision} · <Time value={p.createdAt} />
               </p>
             </article>
           ))}
@@ -211,6 +211,7 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
       proposal: p,
       base,
       currentRevision,
+      state,
     } = core.knowledge.getProposal(c.get('principal'), c.req.param('id'));
     const common = frame(c);
     const changes = diffLines(base.body, p.body, { maxEditLength: 2000, timeout: 50 }) ?? [
@@ -218,10 +219,10 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
       { value: p.body, removed: false, added: true },
     ];
     return c.html(
-      <Layout title={`Proposal: ${p.title}`} {...common}>
+      <Layout title={`Proposal: ${p.title}`} section="proposals" {...common}>
         <section class="panel">
           <p>
-            Status: <strong>{p.status}</strong> · base {p.baseRevision} · current {currentRevision}
+            <ProposalStateBadge state={state} /> · base {p.baseRevision} · current {currentRevision}
           </p>
           <p class="meta">
             Author: {p.authorId} · <Time value={p.createdAt} />
@@ -252,14 +253,14 @@ export function registerKnowledgeRoutes(app: Hono<WebEnvironment>, core: Communi
               Reviewed by {p.reviewerId}: {p.decisionNote}
             </p>
           )}
-          {p.status === 'pending' && currentRevision !== p.baseRevision && (
+          {state === 'conflicted' && (
             <p role="alert">
               This proposal is stale. Submit a new proposal based on the current resource.
             </p>
           )}
           {p.status === 'pending' && common.actor.role === 'admin' && (
             <div class="review-actions">
-              {common.actor.id !== p.authorId && currentRevision === p.baseRevision && (
+              {common.actor.id !== p.authorId && state === 'pending' && (
                 <form action={`/proposals/${p.id}/approve`} method="post">
                   <Csrf value={common.csrf} />
                   <label>

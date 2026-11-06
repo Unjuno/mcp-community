@@ -91,6 +91,8 @@ Extensions are locally installed **trusted Node.js packages**. They are never up
 
 Restart the server. Create a new agent token with `ext:example:greet` scope, then call `ext_example_greet` from your MCP client. Disable or remove the entry and restart to remove the tool. The sample extension lives in `extensions/example`; the contract lives in `packages/extension-api`.
 
+The [state-machine model](docs/STATE_MACHINES.md) documents knowledge proposals (`pending`, derived `conflicted`, `approved`, `rejected`), forum moderation, and credential lifecycles. Disabling an account or resetting a human password irreversibly revokes affected credentials (including the human owner's agent credentials); new tokens must be issued on reactivation. The [architecture/UX/security review](docs/ARCHITECTURE_REVIEW.md) records the defects and residual risks.
+
 Read [Extension development](docs/EXTENSIONS.md) for custom packages, permissions, version ranges, tests and safe installation. **Extensions run in the same Node.js process and are not sandboxed.**
 
 ## Operating and upgrading

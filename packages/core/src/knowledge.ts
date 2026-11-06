@@ -4,6 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { AppError, notFound, parse } from './errors.js';
 import type { Runtime } from './runtime.js';
+import { proposalState, requireProposalTransition } from './state-machines.js';
 import type { Principal } from './types.js';
 
 const resourceId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
@@ -178,14 +179,14 @@ export class Knowledge {
     this.rt.writeRate(actor.id);
     return this.rt.db.sqlite
       .transaction(() => {
-        if (
-          !this.rt.db.orm
-            .select()
-            .from(knowledgeResources)
-            .where(eq(knowledgeResources.id, data.id))
-            .get()
-        )
-          notFound();
+        const resource = this.rt.db.orm
+          .select()
+          .from(knowledgeResources)
+          .where(eq(knowledgeResources.id, data.id))
+          .get();
+        if (!resource) notFound();
+        if (resource.currentRevision !== data.baseRevision)
+          throw new AppError(409, 'REVISION_CONFLICT', 'Knowledge changed since editing began');
         // Foreign key enforces that a proposal's base revision actually exists.
         if (
           !this.rt.db.orm
@@ -234,17 +235,22 @@ export class Knowledge {
         authorId: proposals.authorId,
         authorName: actors.name,
         status: proposals.status,
+        currentRevision: knowledgeResources.currentRevision,
         createdAt: proposals.createdAt,
       })
       .from(proposals)
       .innerJoin(actors, eq(actors.id, proposals.authorId))
+      .innerJoin(knowledgeResources, eq(knowledgeResources.id, proposals.resourceId))
       .where(query.status ? eq(proposals.status, query.status) : undefined)
       .orderBy(desc(proposals.createdAt), desc(proposals.id))
       .limit(query.pageSize + 1)
       .offset((query.page - 1) * query.pageSize)
       .all();
     return {
-      items: rows.slice(0, query.pageSize),
+      items: rows.slice(0, query.pageSize).map(({ currentRevision, ...item }) => ({
+        ...item,
+        state: proposalState(item.status, item.baseRevision, currentRevision),
+      })),
       page: query.page,
       pageSize: query.pageSize,
       hasNext: rows.length > query.pageSize,
@@ -267,7 +273,12 @@ export class Knowledge {
       .get();
     if (!base) notFound();
     const current = this.get(principal, { id: proposal.resourceId });
-    return { proposal, base, currentRevision: current.currentRevision };
+    return {
+      proposal,
+      base,
+      currentRevision: current.currentRevision,
+      state: proposalState(proposal.status, proposal.baseRevision, current.currentRevision),
+    };
   }
   approve(principal: Principal | null, input: unknown) {
     const admin = this.rt.admin(principal);
@@ -280,19 +291,20 @@ export class Knowledge {
           .where(eq(proposals.id, data.id))
           .get();
         if (!proposal) notFound();
-        if (proposal.status !== 'pending')
-          throw new AppError(409, 'PROPOSAL_RESOLVED', 'Proposal already resolved');
-        if (proposal.authorId === admin.id)
-          throw new AppError(403, 'SELF_APPROVAL', 'Author cannot approve own proposal');
         const current = this.rt.db.orm
           .select()
           .from(knowledgeResources)
           .where(eq(knowledgeResources.id, proposal.resourceId))
           .get();
         if (!current) notFound();
-        if (current.currentRevision !== proposal.baseRevision)
-          throw new AppError(409, 'REVISION_CONFLICT', 'Knowledge changed since proposal was made');
+        requireProposalTransition(
+          proposalState(proposal.status, proposal.baseRevision, current.currentRevision),
+          'approve',
+          proposal.authorId,
+          admin.id,
+        );
         const now = this.rt.timestamp();
+        const reviewNote = data.reason?.trim() || null;
         const next = current.currentRevision + 1;
         this.rt.db.orm
           .insert(knowledgeRevisions)
@@ -304,7 +316,7 @@ export class Knowledge {
             sources: proposal.sources,
             authorId: proposal.authorId,
             reviewerId: admin.id,
-            reason: data.reason ?? proposal.note,
+            reason: reviewNote ?? proposal.note,
             restoredFrom: null,
             createdAt: now,
           })
@@ -323,7 +335,7 @@ export class Knowledge {
           .set({
             status: 'approved',
             reviewerId: admin.id,
-            decisionNote: data.reason ?? null,
+            decisionNote: reviewNote,
             reviewedAt: now,
           })
           .where(eq(proposals.id, data.id))
@@ -332,6 +344,7 @@ export class Knowledge {
           resource: current.id,
           revision: next,
         });
+        this.rt.event('proposal.resolved', data.id);
         this.rt.event('knowledge.updated', current.id);
         return { id: current.id, currentRevision: next };
       })
@@ -348,8 +361,7 @@ export class Knowledge {
           .where(eq(proposals.id, data.id))
           .get();
         if (!proposal) notFound();
-        if (proposal.status !== 'pending')
-          throw new AppError(409, 'PROPOSAL_RESOLVED', 'Proposal already resolved');
+        requireProposalTransition(proposal.status, 'reject', proposal.authorId, admin.id);
         this.rt.db.orm
           .update(proposals)
           .set({

@@ -54,6 +54,27 @@ CREATE TABLE proposals (
 CREATE INDEX proposals_status_idx ON proposals(status, created_at);
 `,
   },
+  {
+    id: 3,
+    sql: `
+CREATE TRIGGER proposal_decision_state_guard BEFORE UPDATE ON proposals BEGIN
+  SELECT CASE WHEN OLD.status IN ('approved','rejected')
+    THEN RAISE(ABORT, 'Resolved proposals are immutable') END;
+  SELECT CASE WHEN NEW.status NOT IN ('approved','rejected')
+    OR NEW.reviewer_id IS NULL OR NEW.reviewed_at IS NULL
+    OR (NEW.status = 'approved' AND NEW.reviewer_id = OLD.author_id)
+    OR NEW.id IS NOT OLD.id OR NEW.resource_id IS NOT OLD.resource_id
+    OR NEW.base_revision IS NOT OLD.base_revision OR NEW.title IS NOT OLD.title
+    OR NEW.body IS NOT OLD.body OR NEW.sources IS NOT OLD.sources
+    OR NEW.note IS NOT OLD.note OR NEW.author_id IS NOT OLD.author_id
+    OR NEW.created_at IS NOT OLD.created_at
+    THEN RAISE(ABORT, 'Invalid proposal state transition') END;
+END;
+CREATE TRIGGER proposal_insert_state_guard BEFORE INSERT ON proposals
+WHEN NEW.status <> 'pending' OR NEW.reviewer_id IS NOT NULL OR NEW.reviewed_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'New proposals must be pending'); END;
+`,
+  },
 ];
 
 export function migrateDatabase(sqlite: BetterSqlite3.Database, selected = migrations): void {

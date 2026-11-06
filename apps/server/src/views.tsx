@@ -1,3 +1,4 @@
+import type { ProposalState } from '@mcp-community/core';
 import type { Actor } from '@mcp-community/database';
 import { raw } from 'hono/html';
 import type { Child } from 'hono/jsx';
@@ -6,6 +7,7 @@ export function Layout(props: {
   title: string;
   actor?: Actor | null;
   csrf?: string;
+  section?: 'forum' | 'knowledge' | 'proposals' | 'admin';
   children: Child;
 }) {
   return (
@@ -19,6 +21,9 @@ export function Layout(props: {
           <link rel="stylesheet" href="/assets/style.css" />
         </head>
         <body>
+          <a class="skip-link" href="#main-content">
+            Skip to main content
+          </a>
           <header>
             <div class="header-inner">
               <a class="brand" href="/threads">
@@ -27,10 +32,26 @@ export function Layout(props: {
               <span class="tagline">Shared knowledge. Reviewed changes.</span>
               {props.actor && (
                 <nav aria-label="Main navigation">
-                  <a href="/threads">Forum</a>
-                  <a href="/knowledge">Knowledge</a>
-                  <a href="/proposals">Proposals</a>
-                  {props.actor.role === 'admin' && <a href="/admin">Administration</a>}
+                  <a href="/threads" aria-current={props.section === 'forum' ? 'page' : undefined}>
+                    Forum
+                  </a>
+                  <a
+                    href="/knowledge"
+                    aria-current={props.section === 'knowledge' ? 'page' : undefined}
+                  >
+                    Knowledge
+                  </a>
+                  <a
+                    href="/proposals"
+                    aria-current={props.section === 'proposals' ? 'page' : undefined}
+                  >
+                    Proposals
+                  </a>
+                  {props.actor.role === 'admin' && (
+                    <a href="/admin" aria-current={props.section === 'admin' ? 'page' : undefined}>
+                      Administration
+                    </a>
+                  )}
                   <form action="/logout" method="post">
                     <Csrf value={props.csrf ?? ''} />
                     <button class="quiet" type="submit">
@@ -41,7 +62,7 @@ export function Layout(props: {
               )}
             </div>
           </header>
-          <main>
+          <main id="main-content" tabindex={-1}>
             <div class="page-heading">
               <h1>{props.title}</h1>
               {props.actor && <span class="identity">{props.actor.name}</span>}
@@ -57,6 +78,17 @@ export function Layout(props: {
     </>
   );
 }
+const proposalLabels: Record<ProposalState, string> = {
+  pending: 'Pending review',
+  conflicted: 'Conflicted',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+/** Human-readable presentation of the state projected from the current revision. */
+export function ProposalStateBadge(props: { state: ProposalState }) {
+  return <span class={`status status-${props.state}`}>{proposalLabels[props.state]}</span>;
+}
+
 export function Csrf(props: { value: string }) {
   return <input type="hidden" name="_csrf" value={props.value} />;
 }

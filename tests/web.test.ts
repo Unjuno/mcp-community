@@ -8,6 +8,26 @@ beforeEach(async () => {
 afterEach(() => f?.db.close());
 
 describe('browser authentication and forum', () => {
+  it('exposes a keyboard skip link and identifies the current navigation section', async () => {
+    const session = await login(f.app);
+    const result = await f.app.request(`${ORIGIN}/threads`, {
+      headers: { cookie: session.cookie },
+    });
+    const html = await result.text();
+    expect(html).toContain('href="#main-content"');
+    expect(html).toContain('id="main-content"');
+    expect(html).toMatch(/href="\/threads" aria-current="page"/);
+    expect(html).toContain('aria-label="Main navigation"');
+  });
+  it('shows the review workflow and current section without an SPA', async () => {
+    const session = await login(f.app);
+    const page = await f.app.request(`${ORIGIN}/proposals`, {
+      headers: { cookie: session.cookie },
+    });
+    const html = await page.text();
+    expect(html).toMatch(/href="\/proposals" aria-current="page"/);
+    expect(html).toContain('Proposals');
+  });
   it('serves HTML in standards mode rather than browser quirks mode', async () => {
     const response = await f.app.request(`${ORIGIN}/login`);
     expect((await response.text()).startsWith('<!DOCTYPE html>')).toBe(true);

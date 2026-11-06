@@ -51,3 +51,22 @@ Phase 7: README, AGENTS, CONTRIBUTING, SECURITY, Apache-2.0 LICENSE, extension a
 ## Final security and operations review
 
 Preserved the existing published implementation and reviewed it in an isolated worktree. Added narrowly scoped improvements rather than replacing the extension contract or knowledge schema: password recovery/session invalidation, stale-hash login rejection, peer-address throttling, resource error redaction, standards-mode HTML, repeatable demo data, custom-workspace build inclusion, real predecessor-schema upgrade testing and compiled-release smoke tests. 47/47 local tests now pass. Browser navigation was blocked by environment policy and remains unverified. Expanded CI now includes actual container startup, health, non-root identity and migration execution. See `VERIFICATION.md` for the final CI evidence.
+
+## State-machine audit and review branch (2026-11-06)
+
+This is a backward-compatible review of the existing MVP, not a new feature tier.
+
+- [x] Extract hidden state transitions from proposals, revisions, accounts, tokens, sessions, moderation, extensions and outbox.
+- [x] Add explicit proposal-state projection and publication transition guards in shared core.
+- [x] Reject stale proposals at submission; present conflicts consistently in Web and MCP.
+- [x] Add append-only migration 3 for terminal proposal immutability.
+- [x] Make credential invalidation terminal across disable/reactivate and owner reset.
+- [x] Make duplicate revocation/moderation idempotent; protect forum opening posts.
+- [x] Emit proposal-resolution and knowledge-update outbox rows in one approval transaction.
+- [x] Improve Web accessibility and state-aware review without an SPA or new runtime dependency.
+- [x] Write `docs/STATE_MACHINES.md` and `docs/ARCHITECTURE_REVIEW.md`.
+- [ ] Record current review branch CI (typecheck, lint, tests, smoke, migration, container).
+- [ ] External security review and 3-developer usability experiment (outside automated scope).
+
+The prior local **47 tests** were retained, plus new lifecycle and Web accessibility tests.
+The review's measured test results and unresolved gates must be updated after CI; do not label an unexecuted test PASS.

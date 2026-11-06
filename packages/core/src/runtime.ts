@@ -8,6 +8,7 @@ import {
 } from '@mcp-community/database';
 import { eq, lt } from 'drizzle-orm';
 import { AppError } from './errors.js';
+import { credentialState } from './state-machines.js';
 import { BASE_SCOPES, type Principal } from './types.js';
 
 export class Runtime {
@@ -45,8 +46,7 @@ export class Runtime {
     if (
       !token ||
       token.actorId !== principal.actorId ||
-      token.revokedAt !== null ||
-      token.expiresAt <= this.now()
+      credentialState(token.expiresAt, token.revokedAt, this.now()) !== 'active'
     )
       throw new AppError(401, 'INVALID_TOKEN', 'Invalid access token');
     return token;
