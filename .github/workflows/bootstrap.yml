@@ -2,7 +2,7 @@ name: Dependency bootstrap
 on:
   push:
     branches: [feat/mvp-foundation]
-    paths: ['.github/workflows/bootstrap.yml']
+    paths: [".github/workflows/bootstrap.yml"]
 permissions:
   contents: read
 jobs:
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Resolve official dependencies and record versions
         run: |
           mkdir -p /tmp/mcp-kit
