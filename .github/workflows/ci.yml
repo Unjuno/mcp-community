@@ -29,10 +29,30 @@ jobs:
       - run: docker compose build
       - name: Start and inspect non-root container
         run: |
+          export APP_ORIGIN=http://127.0.0.1:3000
           docker compose up -d --wait --wait-timeout 120
           curl --fail http://localhost:3000/health
           test "$(docker compose exec -T community id -u)" != "0"
           docker compose exec -T community node apps/server/dist/cli.js db:migrate
+      - name: Black-box MCP write and SQLite persistence through container recreation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match the browser-visible Host header for the MCP Origin/Host policy.
+          export APP_ORIGIN=http://127.0.0.1:3000
+          password="$(openssl rand -hex 24)"
+          printf '%s\n' "$password" | docker compose exec -T community node apps/server/dist/cli.js setup --username admin --name 'CI administrator' --password-stdin >/dev/null
+          unset password
+          docker compose exec -T community node apps/server/dist/cli.js demo:seed --as admin >/dev/null
+          agent_json="$(docker compose exec -T community node apps/server/dist/cli.js agent:create --as admin --name 'Container smoke agent' --scopes forum:read,forum:write,knowledge:read)"
+          export CONTAINER_SMOKE_TOKEN="$(printf '%s' "$agent_json" | node -e "let s=''; process.stdin.on('data', x => s += x); process.stdin.on('end', () => process.stdout.write(JSON.parse(s).token));")"
+          unset agent_json
+          echo "::add-mask::$CONTAINER_SMOKE_TOKEN"
+          result="$(timeout 60s node scripts/container-smoke.mjs write)"
+          export CONTAINER_SMOKE_THREAD_ID="$(printf '%s' "$result" | node -e "let s=''; process.stdin.on('data', x => s += x); process.stdin.on('end', () => process.stdout.write(JSON.parse(s).threadId));")"
+          # A replacement container must re-read data AND the token from the same named SQLite volume.
+          docker compose up -d --force-recreate --wait --wait-timeout 120
+          timeout 60s node scripts/container-smoke.mjs verify
       - name: Container logs
         if: failure()
         run: docker compose logs --no-color
