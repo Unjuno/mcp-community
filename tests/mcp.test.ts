@@ -1,6 +1,6 @@
 import { request as nodeRequest } from 'node:http';
 import type { Client } from '@modelcontextprotocol/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Fixture, fixture } from './helpers.js';
 import { connect, listen } from './mcp-helpers.js';
 
@@ -95,6 +95,37 @@ describe('official v2 MCP over a real TCP HTTP endpoint', () => {
       expect(response.status).toBe(401);
       expect(response.headers.get('www-authenticate')).toContain('Bearer');
       if (token) expect(await response.text()).not.toContain(token);
+    }
+  });
+  it('does not expose private backend errors through resource reads or discovery', async () => {
+    const agent = f.core.identity.createAgent(f.adminContext, {
+      name: 'Reader',
+      scopes: ['forum:read'],
+    });
+    const thread = f.core.forum.createThread(f.adminContext, {
+      title: 'Resource error check',
+      body: 'Body',
+    });
+    const client = await useClient(http.origin, agent.token);
+    const read = vi.spyOn(f.core.forum, 'getThread').mockImplementation(() => {
+      throw new Error('private-database-password-sentinel');
+    });
+    const list = vi.spyOn(f.core.forum, 'listThreads').mockImplementation(() => {
+      throw new Error('private-database-password-sentinel');
+    });
+    try {
+      for (const operation of [
+        () => client.readResource({ uri: `community://threads/${thread.id}` }),
+        () => client.listResources(),
+      ]) {
+        const error = await operation().catch((failure: unknown) => failure);
+        expect(error).toBeInstanceOf(Error);
+        expect(String(error)).not.toContain('private-database-password-sentinel');
+        expect(String(error)).toContain('Resource unavailable');
+      }
+    } finally {
+      read.mockRestore();
+      list.mockRestore();
     }
   });
   it('rejects untrusted Origins and Hosts before handling an authenticated request', async () => {

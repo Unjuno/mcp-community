@@ -34,3 +34,7 @@ MCP HTTP authentication here is a **manual scoped bearer-token profile**, not OA
 ## Security verification
 
 The local tests exercise XSS, CSRF, host/origin, invalid/revoked/out-of-scope token, approval abuse, migration immutability and extension manifest errors. Dependency audit and Docker image build are CI jobs; security scans require network access. Report any unexecuted checks as UNCERTAIN rather than PASS.
+
+## Security review additions
+
+Password reset revokes existing sessions, and login rechecks the persisted password hash after asynchronous verification to reject a password invalidated concurrently. Disabled humans and their agents cannot authenticate. The HTTP adapter also limits invalid MCP authentication attempts before entering the SDK; socket-derived peer addresses are used rather than spoofable forwarded headers. Resource read/discovery callbacks replace unexpected backend exceptions with a generic error, matching the secrecy boundary already used for tools. These cases have explicit regression tests.

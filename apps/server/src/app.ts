@@ -1,3 +1,4 @@
+import { getConnInfo } from '@hono/node-server/conninfo';
 import {
   AppError,
   Community,
@@ -48,6 +49,17 @@ export function createApp(options: AppOptions) {
   const origin = configured.origin;
   const cookieName = options.production ? '__Host-mcc_session' : 'mcc_session';
   const app = new Hono<WebEnvironment>();
+  const addresses = new WeakMap<Request, string>();
+  const clientAddress = (request: Request) =>
+    options.clientAddress?.(request) ?? addresses.get(request) ?? 'local';
+  app.use('*', async (c, next) => {
+    try {
+      addresses.set(c.req.raw, getConnInfo(c).remote.address ?? 'local');
+    } catch {
+      addresses.set(c.req.raw, 'local');
+    } // In-process request tests have no socket.
+    await next();
+  });
   app.use('*', async (c, next) => {
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('X-Frame-Options', 'DENY');
@@ -72,12 +84,15 @@ export function createApp(options: AppOptions) {
   app.get('/assets/style.css', (c) =>
     c.body(styles, 200, { 'Content-Type': 'text/css; charset=utf-8' }),
   );
-  app.all('/mcp', (c) => handleMcp(c.req.raw, core, origin));
+  app.all('/mcp', (c) => {
+    core.runtime.rate(`mcp-auth:${clientAddress(c.req.raw)}`, 300, 60000);
+    return handleMcp(c.req.raw, core, origin);
+  });
   app.use('*', async (c, next) => {
     let raw = getCookie(c, cookieName);
     let session = core.identity.session(raw);
     if (c.req.path === '/login' && c.req.method === 'GET' && !session) {
-      const guest = core.identity.guestSession(options.clientAddress?.(c.req.raw) ?? 'local');
+      const guest = core.identity.guestSession(clientAddress(c.req.raw));
       raw = guest.token;
       session = core.identity.session(raw);
       setCookie(c, cookieName, raw, {
@@ -132,7 +147,7 @@ export function createApp(options: AppOptions) {
   registerWebRoutes(app, core, {
     setSession,
     clearSession,
-    clientAddress: options.clientAddress ?? (() => 'local'),
+    clientAddress,
   });
   registerKnowledgeRoutes(app, core);
   app.onError((error, c) => {

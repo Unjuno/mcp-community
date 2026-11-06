@@ -194,6 +194,46 @@ export class Identity {
     }
     return principal;
   }
+  async resetPassword(principal: Principal | null, input: unknown) {
+    const admin = this.rt.admin(principal);
+    const data = parse(
+      z.strictObject({ actorId: z.uuid(), password: z.string().min(12).max(128) }),
+      input,
+    );
+    const passwordHash = await hashPassword(data.password);
+    this.rt.db.sqlite
+      .transaction(() => {
+        this.rt.admin(principal); // Recheck after asynchronous password hashing.
+        const updated = this.rt.db.orm
+          .update(users)
+          .set({ passwordHash })
+          .where(eq(users.actorId, data.actorId))
+          .run();
+        if (!updated.changes) notFound();
+        this.rt.db.orm.delete(sessions).where(eq(sessions.actorId, data.actorId)).run();
+        this.rt.audit(admin.id, 'identity.reset_password', data.actorId);
+      })
+      .immediate();
+  }
+  setDisabled(principal: Principal | null, input: unknown) {
+    const admin = this.rt.admin(principal);
+    const data = parse(z.strictObject({ actorId: z.uuid(), disabled: z.boolean() }), input);
+    if (data.actorId === admin.id && data.disabled)
+      throw new AppError(400, 'SELF_DISABLE', 'An administrator cannot disable their own account');
+    this.rt.db.sqlite
+      .transaction(() => {
+        const changed = this.rt.db.orm
+          .update(actors)
+          .set({ disabled: data.disabled })
+          .where(eq(actors.id, data.actorId))
+          .run();
+        if (!changed.changes) notFound();
+        if (data.disabled)
+          this.rt.db.orm.delete(sessions).where(eq(sessions.actorId, data.actorId)).run();
+        this.rt.audit(admin.id, 'identity.set_disabled', data.actorId, { disabled: data.disabled });
+      })
+      .immediate();
+  }
   revokeToken(principal: Principal | null, id: unknown) {
     const admin = this.rt.admin(principal);
     const tokenId = parse(z.uuid(), id);
@@ -248,6 +288,24 @@ export class Identity {
     }
     return this.rt.db.sqlite
       .transaction(() => {
+        const currentUser = this.rt.db.orm
+          .select()
+          .from(users)
+          .where(eq(users.actorId, actor.id))
+          .get();
+        const currentActor = this.rt.db.orm
+          .select()
+          .from(actors)
+          .where(eq(actors.id, actor.id))
+          .get();
+        if (
+          !currentUser ||
+          currentUser.passwordHash !== user?.passwordHash ||
+          !currentActor ||
+          currentActor.disabled ||
+          currentActor.kind !== 'human'
+        )
+          throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid credentials');
         if (previousSession)
           this.rt.db.orm
             .delete(sessions)

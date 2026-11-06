@@ -1,15 +1,9 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
-COPY apps/server/package.json apps/server/package.json
-COPY packages/core/package.json packages/core/package.json
-COPY packages/database/package.json packages/database/package.json
-COPY packages/mcp/package.json packages/mcp/package.json
-COPY packages/extension-api/package.json packages/extension-api/package.json
-COPY extensions/example/package.json extensions/example/package.json
-RUN npm ci
+# Include all administrator-reviewed workspace packages, not only the bundled sample.
 COPY . .
+RUN npm ci
 RUN npm run build && npm prune --omit=dev --ignore-scripts
 
 FROM node:24-bookworm-slim AS runtime

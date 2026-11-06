@@ -24,5 +24,18 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run smoke
       - run: npm audit --audit-level=high
       - run: docker compose build
+      - name: Start and inspect non-root container
+        run: |
+          docker compose up -d --wait --wait-timeout 120
+          curl --fail http://localhost:3000/health
+          test "$(docker compose exec -T community id -u)" != "0"
+          docker compose exec -T community node apps/server/dist/cli.js db:migrate
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop ephemeral CI containers
+        if: always()
+        run: docker compose down -v

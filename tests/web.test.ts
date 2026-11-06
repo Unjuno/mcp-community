@@ -8,6 +8,10 @@ beforeEach(async () => {
 afterEach(() => f?.db.close());
 
 describe('browser authentication and forum', () => {
+  it('serves HTML in standards mode rather than browser quirks mode', async () => {
+    const response = await f.app.request(`${ORIGIN}/login`);
+    expect((await response.text()).startsWith('<!DOCTYPE html>')).toBe(true);
+  });
   it('rotates a login session and sets secure cookie attributes', async () => {
     const session = await login(f.app);
     expect(session.cookie).not.toBe(session.guest);

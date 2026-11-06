@@ -1,6 +1,6 @@
 # Developing MCP Community extensions
 
-Extensions are the primary customization mechanism. They add tools to the community MCP server **without modifying core source**. `packages/extension-api` is the published contract and has no runtime dependency on the core.
+Extensions are the primary customization mechanism. They add tools to the community MCP server **without modifying core source**. `packages/extension-api` contains the versioned contract shipped in this repository and has no runtime dependency on the core.
 
 ## Example
 
@@ -38,7 +38,7 @@ const myExtension: CommunityExtension = {
 export default myExtension;
 ```
 
-For a standalone npm package, declare `@mcp-community/extension-api` and `zod` dependencies. Build an ES module with a `default` export. Add it to `community.extensions.json` **after independent review**, set `enabled:true`, configure and restart. The server loads a static local file; there is no remote marketplace or Web upload. For the sample already included in the repository:
+These packages have **not** been published to the npm registry. For a standalone package, build the repository, run `npm pack --workspace @mcp-community/extension-api --pack-destination /your/artifact/directory`, and install the resulting tarball plus `zod@4.6.7` into your extension project. Pin the reviewed tarball/version; do not assume the package name is available from npm. Build an ES module with a `default` export. Add it to `community.extensions.json` **after independent review**, set `enabled:true`, configure and restart. The server loads a static local file; there is no remote marketplace or Web upload. For the sample already included in the repository:
 
 ```json
 {
@@ -61,3 +61,9 @@ Provision a scoped agent with `ext:example:greet` and call `ext_example_greet`. 
 - Test your package against the supported `coreApi` range and `npm run typecheck && npm test` before distribution. Provide migration and downgrade guidance if you add persistent data.
 
 See the automated contract and HTTP tests in `tests/extensions.test.ts` and upgrade tests in `tests/upgrade.test.ts`.
+
+## Local workspace development
+
+Copy `extensions/example` to `extensions/my-extension`, change its package name, manifest ID, scopes and tool implementation, and keep its `tsconfig.json` references to the extension API. Run `npm install` at the repository root to update the workspace lockfile, then `npm run build`. The build script discovers extension TypeScript projects; no core source edit is required. Configure the new npm package name in `community.extensions.json` and restart. Commit your reviewed extension and lockfile in your community deployment repository. Docker includes all workspace packages, not just the bundled example.
+
+A separately built package can instead be packed and installed with `npm install /path/to/reviewed-extension.tgz --workspace @mcp-community/server`. Preserve that archive or use an approved package registry so `npm ci` remains reproducible.
