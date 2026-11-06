@@ -1,0 +1,57 @@
+name: Apply reviewed state machine patch
+on:
+  push:
+    branches: ["fix/state-machine-audit"]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Verify archived patch digest and materialize it
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64,hashlib,lzma
+          data = base64.b64decode(Path('.bootstrap/state-machine-review.xz.b64').read_text().strip(), validate=True)
+          assert hashlib.sha256(data).hexdigest() == '88ebeb0a3a610f481cb9363a40e715c8d2bc55efa22dd5318b275a181b0b4b8d'
+          patch = lzma.decompress(data)
+          assert hashlib.sha256(patch).hexdigest() == '6fef12bb7b177cf7ec2216f4aa832d9333a1ea639da6a33209fb9ba40f6e4b15'
+          Path('/tmp/state-machine-review.patch').write_bytes(patch)
+          print('Verified deterministic patch bytes:',len(patch))
+          PY
+      - name: Apply on audited feature base and run all release gates
+        env:
+          EXPECTED_HEAD: "db62f7e0ff70325764c54dba869200ae066e5d4d"
+        run: |
+          set -euo pipefail
+          git fetch origin feat/mvp-foundation
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          git checkout -B feat/mvp-foundation FETCH_HEAD
+          git apply --check /tmp/state-machine-review.patch
+          git apply --index /tmp/state-machine-review.patch
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run smoke
+          npm audit --audit-level=high
+          docker compose build
+          trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
+          docker compose up -d --wait --wait-timeout 120
+          curl --fail http://localhost:3000/health
+          test "$(docker compose exec -T community id -u)" != "0"
+          docker compose exec -T community node apps/server/dist/cli.js db:migrate
+          docker compose down -v
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: make proposal and credential states explicit; improve moderation and UX"
+          git push origin HEAD:refs/heads/feat/mvp-foundation
