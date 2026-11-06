@@ -1,0 +1,5 @@
+{
+  "extensions": [
+    { "package": "@mcp-community/example", "enabled": true, "config": { "greeting": "Hello" } }
+  ]
+}

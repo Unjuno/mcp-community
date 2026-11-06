@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/database"
+    },
+    {
+      "path": "packages/extension-api"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/mcp"
+    },
+    {
+      "path": "extensions/example"
+    },
+    {
+      "path": "apps/server"
+    }
+  ]
+}

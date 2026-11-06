@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+data/
+*.sqlite*
+coverage/
+.worktrees/
+.superpowers/
+test-results/
+
+node_modules
+**/node_modules
