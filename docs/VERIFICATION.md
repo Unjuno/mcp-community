@@ -13,7 +13,7 @@ Environment: Node.js 24.22.2, Linux x64, SQLite native driver 13.0.3; official M
 
 ## CI
 
-The previous published candidate passed GitHub Actions run 42168684268 (36 tests, clean npm install, strict typecheck, lint, live dependency audit and Docker build). The security-review revision adds container startup/health/non-root/migration checks and must obtain a new successful CI result before being marked verified.
+The security-review commit `6ef5f2f` passed [GitHub Actions run 42170616858](https://github.com/Unjuno/mcp-community/actions/runs/42170616858): clean `npm ci`, strict typecheck, Biome lint, all 47 tests, compiled live-server/MCP/extension/backup smoke test, online `npm audit --audit-level=high`, `docker compose build`, and real non-root container startup, health and migration checks. Earlier baseline run 42168684268 also passed. This verifies the technical MVP in CI; it is not an independent production security certification.
 
 ## Not performed / limitations
 
