@@ -1,0 +1,37 @@
+{
+  "name": "mcp-community",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "extensions/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.tests.json --noEmit",
+    "test": "NODE_OPTIONS=--conditions=development vitest run",
+    "test:watch": "NODE_OPTIONS=--conditions=development vitest",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "start": "node --env-file-if-exists=.env apps/server/dist/index.js",
+    "dev": "node --env-file-if-exists=.env --conditions=development --import tsx --watch apps/server/src/index.ts",
+    "cli": "node --env-file-if-exists=.env apps/server/dist/cli.js",
+    "audit:deps": "npm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "24.19.2",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/semver": "7.8.0",
+    "@biomejs/biome": "2.6.5",
+    "typescript": "7.0.2",
+    "tsx": "4.23.15",
+    "vitest": "5.1.0"
+  }
+}

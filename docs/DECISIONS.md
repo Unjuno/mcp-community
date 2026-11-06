@@ -1,29 +1,41 @@
-# Architecture decisions
+# Architecture decision records
 
-## ADR-001 — Modular monolith (accepted)
+## ADR-001: Stack and boundaries
 
-Use Node 24, TypeScript strict, Hono JSX SSR and SQLite. Keep the MCP adapter and extension contract independent. Do not introduce Astro, a SPA or distributed infrastructure for this MVP.
+Node 24, TypeScript strict, Hono SSR, official MCP SDK v2.4.0, SQLite with better-sqlite3 and typed Drizzle queries. Keep adapters separate from core use cases and extension contracts. No Astro, SPA or external infrastructure.
 
-## ADR-002 — Authentication scope (accepted)
+## ADR-002: Authentication
 
-Ship browser sessions and manually provisioned scoped bearer tokens. This is NOT an OAuth implementation. Only clients supporting a configured Authorization header can use the MVP; OAuth-only hosts are unsupported until a separately tested standards-based integration is added. MCP wire protocol and authorization interoperability are distinct claims.
+Manual scoped bearer tokens are the MVP machine-auth mechanism, NOT OAuth. Only clients capable of setting Authorization headers are supported. Accounts are provisioned by administrators; no public registration. Reads require authentication. MCP protocol compatibility is distinct from OAuth interoperability.
 
-## ADR-003 — Human review (accepted)
+## ADR-003: Knowledge governance
 
-Only authenticated human administrators through Web/CLI may approve, reject, restore or moderate. Agents cannot self-promote using a tool argument. Reject stale base revisions inside a database transaction. Require independent approval of a proposal.
+A human administrator via Web/CLI performs approval, rejection and restore. No agent or MCP token may obtain this authority. A proposal author cannot approve their own proposal. Compare base revision and write the new revision, audit and outbox atomically. Restore appends a revision.
 
-## ADR-004 — Trusted local extensions (accepted)
+## ADR-004: Extensions
 
-An administrator installs local/npm packages and enables them in configuration; restart is sufficient. No web upload, arbitrary remote import, sandbox claim or marketplace. Extension API compatibility is versioned separately from application releases.
+Local administrator-reviewed packages; explicit enablement and restart. Semver-checked Core API 1.0.0, namespaced permissions and tool names, validated input/output/config. Same-process code is NOT sandboxed. No upload/remote-code execution interface.
 
-## ADR-005 — Empty repository initialization (accepted)
+## ADR-005: Delivery environment
 
-GitHub cannot create a branch without a commit. Create only a README bootstrap on main, then perform all implementation on feat/mvp-foundation. Preserve history; no force push.
+Initial repository was empty; initialize main with README only and use feat/mvp-foundation. Since local DNS is unavailable, bootstrap an offline Node 24/dependency kit from GitHub Actions. Use GitHub tools/Actions for authenticated transport; do not invent test results.
 
-## ADR-006 — Execution environment (accepted)
+## ADR-006: Persistence
 
-The local container cannot resolve GitHub/npm and starts with Node 22. Use GitHub Actions with Node 24 to resolve exact dependency versions, then attempt offline local validation using a temporary development artifact. Do not pretend unexecuted checks passed.
+SQLite only in this MVP, WAL, foreign keys, busy timeout, checksummed transactional migrations. Migration SQL and typed schema live in the database package. PostgreSQL will require a new database adapter and query review; it is not supported by changing a connection string.
 
-## ADR-007 — Security boundaries (accepted)
+## ADR-007: Defaults
 
-Invite/admin-provisioned accounts, authenticated reads, plain-text escaped posts, synchronizer CSRF tokens and strict Origin checking, Secure cookies in production, persistent rate limits and redacted audit metadata. No raw content or credentials in audit logs. Server content is untrusted data for downstream agents, never instructions.
+Plain-text, escaped posts; private authenticated community; no themes, wiki or embedded agents. CSRF on every browser mutation; no secrets or content bodies in audit. Rate limits are persistent and do not trust forwarded IP headers.
+
+## ADR-008: Versioned in-process extensions
+
+An extension manifest declares `id`, `name`, `version`, `coreApi`, `permissions` and a Zod configuration schema. Admins enable local packages in a JSON config file; enabled modules import on process startup. A typed registrar converts local tool names into `ext_<namespace>_<tool>` and checks declared scopes before invocation. Extensions are trusted source code, not a sandbox. Rejected alternative: arbitrary packages uploaded from the browser, because that grants remote code execution.
+
+## ADR-009: Backups and upgrades
+
+Use SQLite's consistent backup API, never an uncontrolled filesystem copy of a running WAL database. A restore takes place while the service is stopped and into an empty target directory. `schema_migrations` checksums prevent editing old migrations. Compatibility test restores a captured database into a fresh process and invokes a previously installed extension.
+
+## ADR-010: OAuth and realtime
+
+MCP streamable HTTP v2 uses manually provisioned scoped bearer tokens for this MVP; implementing OAuth correctly requires an external authorization server and interop tests. Realtime update subscriptions are deferred; transactional outbox records are present to support a later independent notifier.

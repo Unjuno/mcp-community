@@ -1,34 +1,59 @@
-# Architecture
+# Architecture v0.1 (MVP)
 
-## Intent
+## Intent and boundaries
 
-The community exists to maintain and improve a useful MCP server, rather than adding AI search to a conventional forum. The shipped core provides identity, forum, reviewed knowledge, auditing and a small extension contract. Domain features belong in trusted community extensions.
+One installation equals one community. MCP is the primary machine interface; Web SSR is the human interface. Both call the same application services with the **authenticated Principal**. The product is not a Wiki with an MCP wrapper: the objective is ongoing MCP improvement via community discussion, reviewed data, and externally authored tools.
 
-## Boundaries
+```text
+human browser -- Hono SSR / forms ---+
+                                     |  input validation, shared policy, audit
+MCP client ------ v2 HTTP adapter --+--> Community --> Forum, Identity, Knowledge, Proposals
+                                           |                          |
+                                           +-- ExtensionRegistry      |
+                                           |                          |
+                                           +-- SQLite + revisions + outbox
+```
 
-- `apps/server`: Hono HTTP, JSX SSR, cookies, CLI and composition root.
-- `packages/core`: validated use cases and shared authorization. No HTTP or MCP SDK imports.
-- `packages/database`: SQLite connection, typed schema and ordered, checksummed migrations.
-- `packages/mcp`: official v2 SDK integration and tool/resource mapping; no duplicate business rules.
-- `packages/extension-api`: versioned types and registration contracts; independent of core, server and database.
-- `extensions/example`: sample external consumer of the contract.
+The MCP adapter uses `@modelcontextprotocol/server` v2, not custom JSON-RPC. The MCP server is constructed per authenticated request, and resources and tools delegate to shared core services. All data produced by humans and agents is untrusted content; it never has authority to modify runtime instructions.
 
-Both adapters invoke the same services. Browser forms do not loop through HTTP MCP. MCP is a first-class contract, not an internal transport requirement.
+## Packages and dependencies
 
-## State and trust
+- `apps/server`: Hono HTTP, Cookie/session, CSRF, SSR and CLI. Depends on core, MCP and extension loader.
+- `packages/core`: `Community`, `Runtime`, `Identity`, `Forum`, `Knowledge`, `ExtensionRegistry`. Depends on database and extension-api only.
+- `packages/database`: Drizzle SQLite schema, checksummed migrations, WAL, backup.
+- `packages/mcp`: official SDK v2 binding; registers MCP tools and resource templates.
+- `packages/extension-api`: public TypeScript definitions; depends on Zod only. **Never imports the core.**
+- `extensions/example`: sample package using only `extension-api`.
 
-A human administrator provisions accounts. Agents have an accountable human owner and scoped, expiring, revocable opaque tokens. Sessions and tokens are hashed at rest. Human administrator authorization is distinct from agent scopes; no MCP tool approves knowledge or installs code. All reads require authentication by default. Public discovery is not implied by the word community.
+`@mcp-community/core` has no dependency on `@mcp-community/mcp`, Hono or the UI. Moving the UI or changing MCP transport must not require rewriting the domain services.
 
-Forum discussion is not authoritative knowledge. Knowledge revisions are immutable. Proposals reference a base revision; approval performs a transactional compare-and-swap and appends a revision, audit record and outbox event. Restoring a historical version creates a new revision, never rewrites history.
+## Identity & authorization
 
-## Extensions
+`actors` identify humans and agents. Agents belong to a human administrator and are provisioned, scoped and revoked by that administrator. The `Runtime.require` function authorizes every service call, independently of which adapter is used. Browser writes require a session, exact expected Origin, synchronizer CSRF token and form content type. MCP writes require a hashed-at-rest Bearer credential, scopes and expiry/revocation checks. Admin approvals require **human + role=admin + Web/CLI channel**, never agent. Different human administrators can review proposals but the author cannot approve their own proposal.
 
-Administrators install packages and explicitly enable them in local configuration. The registry verifies an ID, semver contract range, configuration schema, declared permissions and unique tool names. Tool execution validates input, checks scopes and validates output. Same-process JavaScript is trusted server code, NOT a sandbox. Disabling an extension removes its tools after restart.
+Do not add OAuth claims until a proper authorization server and client interop tests are implemented. TLS is mandatory for production exposed tokens; Hono checks configured Host to mitigate DNS rebinding.
 
-## Deployment
+## Persistence and consistency
 
-One Node 24 process and one SQLite file on local persistent storage. WAL, foreign keys, busy timeout and transactional migrations. No horizontal scaling or network filesystem database claim. HTTPS terminates at a trusted reverse proxy; the production origin is explicit. Real-time subscriptions, OAuth integration and PostgreSQL are later work.
+SQLite with foreign keys, WAL and busy timeout. All knowledge publications, review decisions, immutable revisions, audit rows and event-outbox rows are created in an `IMMEDIATE` transaction. `knowledge_revisions` has DB triggers preventing updates/deletes; a restore appends a new revision. Two proposals against the same base may exist; second approval fails with `REVISION_CONFLICT` after first is approved. Migrations have sequential IDs and SHA-256 checksums, verified when opening the database. **Never edit a published migration; add a new numbered migration.**
 
-## Verification
+No distributed event bus or subscriptions are required in MVP. `outbox_events` records change intent and permits later delivery without making synchronous notification a correctness condition.
 
-Unit and HTTP tests plus a real official v2 MCP client over a TCP loopback endpoint. Upgrade tests use an older schema fixture and persisted data; backup/restore is exercised. Browser visual automation and Docker verification are recorded separately from HTTP integration tests.
+## Extension contract
+
+Admin installs a local npm workspace/package, then adds it to `community.extensions.json` and restarts. Only `enabled:true` packages are imported. The runtime validates package manifests (unique ID/name, semver/core API compatibility, declared extension-prefixed permission scopes), Zod config schemas, unique names and input/output schemas. Each namespaced tool calls `Runtime.require` before `execute`. Built-in community service methods provided through the execution context **also perform their own scope checks**.
+
+The stable TypeScript interface `CommunityExtension.register(registry)` declares tools. Sample: `ext_example_greet` / `ext:example:greet`. Version of this contract is `CORE_API_VERSION = 1.0.0`, distinct from the MCP protocol version. Trusted extensions can still import Node libraries, open files or access the network: the in-process extension API is **not a security sandbox**. No Web upload/execution.
+
+## Runtime and deployment assumptions
+
+Node.js 24, TypeScript strict, one process, npm workspaces, native `better-sqlite3` compiled for matching ABI, SQLite data on persistent local storage. Docker image runs as non-root, disables additional capabilities and mounts database volume. HTTP port is local by default; production HTTPS is terminated by a separately configured reverse proxy. Redis/PostgreSQL/HA are out of scope. A PostgreSQL driver swap alone is insufficient; schema/query/transaction compatibility needs separate implementation.
+
+## Failure recovery
+
+1. Make a consistent SQLite backup with the CLI before upgrading.
+2. Record installed extension versions and config, run tests on a copy.
+3. Run migration in staging, verify forum/knowledge/admin and MCP tool calls.
+4. If failure occurs, stop server, restore backup to a **clean** data directory, restore matching app/extension versions, restart and rerun health/tests.
+
+See [Security model](SECURITY_MODEL.md), [ADR log](DECISIONS.md), and [Implementation plan](IMPLEMENTATION_PLAN.md).

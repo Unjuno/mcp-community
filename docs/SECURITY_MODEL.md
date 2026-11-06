@@ -1,21 +1,36 @@
-# Security model
+# Security model (MVP)
 
-## Assets and adversaries
+## Assets and trust boundaries
 
-Protect user credentials, session/token secrets, approved knowledge, private community discussion and extension execution authority. Threat actors include anonymous clients, compromised agents, ordinary members, malicious posts and unreviewed extension packages.
+Assets: passwords, bearer tokens, sessions, community posts, reviewed knowledge, revision provenance, audit trail, installed extensions and SQLite data. Boundaries: browser ↔ Hono; remote MCP client ↔ HTTP adapter; adapter ↔ shared `Runtime` policies; admin-managed npm package ↔ Node process; operator ↔ filesystem.
 
-## Boundaries and controls
+| Threat                    | Mitigation implemented                                                                  | Residual risk                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Forged AI identity        | Agent linked to admin-owned actor, hashed bearer token, scoping, expiry and revocation  | Token theft until revocation                                     |
+| Privilege escalation      | Shared `Runtime.require`; human admin approval via Web/CLI only, self-approval rejected | CLI operator is privileged by design                             |
+| Stored XSS                | Plain-text content, escaped JSX, strict CSP without inline script                       | HTML introduced by a future extension must be audited            |
+| Browser CSRF              | Origin equality + per-session synchronizer token + SameSite cookie                      | Misconfigured HTTPS proxy/APP_ORIGIN                             |
+| Injection                 | Zod strict input schemas and typed Drizzle queries                                      | Trusted extension may execute arbitrary Node code                |
+| Replay/spam               | Persistent actor/IP login and write rate limits, idempotent review status               | No distributed rate limit or anti-bot in MVP                     |
+| Data tampering            | SQLite immutable revisions, transactional approval, audit/event rows                    | DB administrator can still modify audit; not externally anchored |
+| Migration failure         | SHA-256 historical migration verification, backup/restore test                          | Storage corruption, disk full, operator mistakes                 |
+| Tool poisoning            | Manifest scope validation, reviewed local package installation, scoped calls            | Tools can be deceptive; no sandbox/provenance signing            |
+| MCP origin/host confusion | Strict configured Host; reject cross-origin browser/MCP requests                        | Reverse proxy must preserve correct Host and TLS                 |
 
-- Shared service authorization prevents adapter-specific privilege bypass.
-- Human admin checks additionally constrain channel and actor kind; token scope never grants administrative review.
-- Parameterized typed database queries; bounded Zod schemas; escaped plain-text SSR.
-- Hashed random sessions and tokens, scrypt password hashing, expiry, revocation and session rotation.
-- Synchronizer CSRF tokens and exact configured-Origin checks for every browser mutation, including login/logout.
-- Strict Host/Origin validation for MCP, body limits, security headers and persistent rate limiting.
-- Knowledge approval, revision append and audit/outbox are one transaction; stale proposals cannot overwrite newer content.
-- Audit metadata is allowlisted and excludes passwords, bearer tokens, cookies, CSRF values and content bodies.
-- Installed extension code has process-level privileges. Only reviewed packages are allowed; it can bypass application controls and is not isolated.
+## HTTP authentication limitation
 
-## Explicit limitations
+MCP HTTP authentication here is a **manual scoped bearer-token profile**, not OAuth 2.1 or the full MCP HTTP authorization extension. No well-known OAuth metadata, authorization code flow or delegated refresh mechanism is supplied. Some clients requiring OAuth cannot connect; do not misrepresent interoperability.
 
-The initial bearer-token mode is not OAuth 2.1. TLS/reverse-proxy configuration, OS patching, backup access control and installed extension review remain the operator's responsibility. Prompt injection cannot be eliminated by a storage server: downstream clients must treat posts/resources as untrusted data and require approval for consequential actions. No security audit or production-readiness certification is claimed.
+## Secrets and operational constraints
+
+- Admin setup generates a one-time password (or accepts password on stdin). Password hashes use scrypt; tokens and sessions are stored as hashes.
+- Sessions and token values are never placed in audit logs. Backup files contain password/token hashes and must be protected.
+- Production requires trusted HTTPS termination and an exact `APP_ORIGIN`; `__Host-` cookie is Secure/HttpOnly/SameSite Lax.
+- Token scopes are individually granted and revocable; do not grant extension scopes to unrelated agents.
+- Same-process extensions have full Node authority despite the restricted convenience API. **Install only reviewed packages from trusted sources.**
+- Security release policy: patch official core and published extension API; independently maintained plugins remain responsibility of their authors/operators.
+- Rate limits use local SQLite and are not suitable for distributed multiserver operation.
+
+## Security verification
+
+The local tests exercise XSS, CSRF, host/origin, invalid/revoked/out-of-scope token, approval abuse, migration immutability and extension manifest errors. Dependency audit and Docker image build are CI jobs; security scans require network access. Report any unexecuted checks as UNCERTAIN rather than PASS.

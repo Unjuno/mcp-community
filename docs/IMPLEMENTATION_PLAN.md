@@ -1,42 +1,47 @@
 # MCP Community Implementation Plan
 
-**Goal:** a self-hosted, MCP-first modular monolith whose trusted extensions survive core upgrades.
-**Architecture:** Web and MCP adapters share application services, authorization, SQLite transactions and audit records. Extensions depend only on the public extension API. One instance serves one community.
-**Spec:** the owner's Autonomous Implementation Master Prompt, 2026-11-06.
+Goal: build the owner's specified MCP-first modular monolith, not only a design.
+Architecture: Hono and MCP adapters call the same authorized services. Trusted extensions depend only on the public contract. One community per SQLite database.
 
-## Repository audit
+## Audit and environment
 
-The repository was empty: contents returned 404, commits returned 409, and no README, license, code or tests existed. A README-only initial commit established `main`; all implementation belongs to `feat/mvp-foundation`. No existing implementation was overwritten.
+The remote repository was empty (contents 404, history 409). README initialized main; all implementation is on feat/mvp-foundation. No license or existing code was present. GitHub connector is authorized for changes. Local outbound DNS is unavailable; official dependencies and Node 24.22.2 were obtained from successful GitHub Actions run 42163595307. Tests will run locally against that exact offline toolchain, then again in GitHub Actions.
 
-## Global constraints
+## Phase ledger
 
-Node.js 24 LTS; TypeScript strict; Hono SSR; official MCP TypeScript SDK v2 and 2026-07-28 Streamable HTTP; SQLite only; npm workspaces; Docker; Vitest. No LLM runtime, SPA, federation, marketplace, arbitrary code upload, Redis or vector database. Do not deploy or merge automatically.
+- [x] Phase 0: audit, scope and architecture recorded remotely.
+- [x] Phase 1: workspaces, health, typed SQLite, managed migrations, Docker and CI.
+- [x] Phase 2: identity, sessions, shared authorization, forum and SSR.
+- [x] Phase 3: official MCP v2 tools/resources and real-client HTTP tests.
+- [x] Phase 4: knowledge revisions, proposals, conflict detection and human approval.
+- [x] Phase 5: external extension contract, registry and sample.
+- [x] Phase 6: upgrade, restore, authorization checks (dependency vulnerability scanning pending network CI).
+- [ ] Phase 7: operator/developer guides, final tests and pull request (local guides complete; remote publication/CI outstanding).
+
+## Verification rules
+
+Each feature starts with a failing behavior test, followed by minimal implementation, full tests, type checking and lint. Runtime assumptions: Node 24, Linux x64 for the native SQLite dependency, single application process, local disk. Changes are committed by phase. No deployment, merge, force push or unreviewed arbitrary code execution.
 
 ## Review focus
 
-- Cross-actor privilege escalation and self-approval through MCP.
-- XSS, forged browser requests and secret disclosure in errors/audit.
-- Simultaneous proposal approval and immutable revision history.
-- Disabled extensions, incompatible contracts and missing scopes.
-- Migration replay, backup restoration and preservation of extension behavior.
+Cross-actor authority; browser CSRF/XSS; duplicate approvals and stale revisions; disabled/incompatible extensions; upgrade and backup data integrity. Explicitly test each rather than inferring correctness from happy paths.
 
-## Phases and verification
+## Lean experiment
 
-- [x] Phase 0: audit repository; record architecture, threat model and decisions; create branch.
-- [ ] Phase 1: workspaces, strict compiler, migrations, health, Docker and CI. Tests: migration idempotence and health.
-- [ ] Phase 2: identity, sessions, forum and SSR. Tests: hashes, session rotation, authorization, validation, moderation, rate limits, XSS and CSRF.
-- [ ] Phase 3: official v2 MCP adapter. Tests: real HTTP client discovery, tools, resources, posting, restricted/revoked/invalid tokens.
-- [ ] Phase 4: resources, revisions, proposals, diff, approval/rejection/restore. Tests: human approval visible over MCP and stale-base rejection.
-- [ ] Phase 5: public extension contract and sample. Tests: registration, output validation, permission enforcement, incompatible API and disabled extensions.
-- [ ] Phase 6: fresh-install/upgrade/backup/security verification. Tests: migration continuity, extension compatibility, data integrity and dependency audit.
-- [ ] Phase 7: README, operational/developer/security guides, final verification and PR.
+H: a third party can add a scoped tool without editing the core and preserve it across core upgrades.
+T: automated contract/migration tests, then a separate study with three developers.
+D: all mandatory technical tests PASS; third-party threshold is two of three completing within 90 minutes. Unperformed tests are UNCERTAIN.
+C: the extension API and forum may be less useful than an ordinary SDK repository.
+U: experience, dependency versions and environment differences. No performance or demand conclusions before measurement.
 
-Each phase records failing tests before implementation, then runs tests, type checking and lint before committing. Failures and unavailable checks are reported rather than labeled successful.
+Phase 1: observed 2 RED tests, implemented foundation, then 2/2 PASS; strict typecheck and Biome PASS. Explicit Database return type fixed an unnameable inferred native-driver declaration. Docker configuration created but not yet executed locally (Docker unavailable).
 
-## Execution ledger
+Phase 2: 15 new RED tests preceded implementation; all 17 tests now PASS, strict typecheck and Biome PASS. Implemented scrypt credentials, hashed sessions/tokens, scoped agents, revocation, shared authorization, persistent rate limits, forum pagination/moderation, escaped SSR, session rotation and synchronizer-CSRF checks. CLI setup and account/agent provisioning added.
 
-2026-11-06: phase 0 started. Local container has Node 22, no Docker and no outbound DNS. GitHub connector can read and write the repository. A temporary bootstrap workflow will resolve official dependencies on Node 24 and provide an offline test kit; production CI will replace it. If unavailable, GitHub Actions remains the test environment.
+Phase 3: official @modelcontextprotocol/server and /client 2.4.0; modern 2026-07-28 negotiation pinned in real TCP tests. 22 tests passed; typecheck and lint passed. No OAuth or legacy-client compatibility claimed. Resource discovery lists the most recent 100 threads; tools provide full pagination. Node fetch normalizes Host, so hostile Host tests use node:http.
 
-## Lean validation
+Phase 4: seven RED knowledge/proposal tests preceded implementation. 29/29 local tests PASS. TypeScript strict typecheck and Biome lint PASS. Knowledge revisions immutable in SQLite, approval transaction checks current revision and rejects self-approval; browser diff is escaped and uses synchronizer CSRF. Docker still untested.
 
-Technical PASS requires all mandatory feature, security, data-preservation and extension tests to pass. Third-party usability testing (3 developers; at least 2 complete an extension within 90 minutes) is NOT RUN / UNCERTAIN until independently performed. No demand, performance or security-certification claims are inferred from automated tests.
+Phase 5: typed extension contract and manifest, explicit local enablement, namespace/scope/schema validation, example package and real MCP-client invocation. Five extension contract tests PASS; disabled plugins do not appear in runtime registry. The local loader has no upload endpoint. Review before installing any package; execution is in-process.
+
+Phase 6: SQLite backup API and `db:backup` CLI, upgrade/restore migration tests and extension tool access on a restored DB. Two upgrade tests PASS. Local package audit and Docker build require network and Docker runner, respectively; **UNCERTAIN** until GitHub CI completes. Static token + Node 24 support; no OAuth claim.
