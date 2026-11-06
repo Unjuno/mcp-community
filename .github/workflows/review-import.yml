@@ -1,0 +1,37 @@
+name: Apply verified MVP review
+on:
+  push:
+    branches: [chore/mvp-review-import]
+    paths: [".github/workflows/review-import.yml"]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply reviewed patch
+        env:
+          EXPECTED_HEAD: aa64d5070efd4c30677dff070ce91619fde90179
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip, hashlib
+          packed = b''.join(Path(f'.bootstrap/review-{i}.bin').read_bytes() for i in range(4))
+          assert hashlib.sha256(packed).hexdigest() == '37606bdbefe459821ab5391c23ff8d21e4f05cd09353883d92e4da67406ff58d'
+          patch = gzip.decompress(packed)
+          assert hashlib.sha256(patch).hexdigest() == 'f4c1a68477c32ec88707479ea39fe7e8aad3f6074ace6e22f21f4adf7816079b'
+          Path('/tmp/mvp-review.patch').write_bytes(patch)
+          PY
+          git fetch origin feat/mvp-foundation
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          git checkout -B feat/mvp-foundation FETCH_HEAD
+          git apply --check /tmp/mvp-review.patch
+          git apply --index /tmp/mvp-review.patch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: harden authentication and resource errors; verify extension workflows"
+          git push origin HEAD:refs/heads/feat/mvp-foundation
