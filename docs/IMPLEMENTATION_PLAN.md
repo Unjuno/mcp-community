@@ -70,3 +70,21 @@ This is a backward-compatible review of the existing MVP, not a new feature tier
 
 The prior local **47 tests** were retained, plus new lifecycle and Web accessibility tests.
 GitHub Actions confirmed **62/62 tests** across 9 files, Node 24 typecheck, Biome, MCP/extension/backup smoke, high-severity dependency audit, Docker build and live non-root container migration. The three-developer usability study, independent security assessment, and production deployment remain **UNCERTAIN / NOT RUN**.
+
+## Public extension contract release gate (2026-11-08)
+
+- [x] Reproduce incorrect read-only tool behavior in a failing real core test.
+- [x] Enforce the `readOnly` operation classification inside the public service facade.
+- [x] Keep legitimately writable tools functional with their separate base scopes.
+- [x] Reproduce the missing Apache-2.0 license in the distributable extension API tarball.
+- [x] Add a packed-artifact + independently compiled v1 extension integration test.
+- [x] Include the contract test in the normal GitHub Actions CI gate.
+- [x] Locally verify the updated build, type checks, lint, 64 tests, independent contract and compiled MCP smoke.
+- [ ] Confirm a fresh clean GitHub CI run and its Docker/MCP/SQLite checks before final acceptance.
+- [ ] External developer usability study and independent security audit (not part of automated MVP).
+
+The public v1 fixture is intentionally outside the workspace, uses the published
+tarball instead of private core imports and has its own Zod installation. A
+future same-major core update that breaks its compile or invocation must fail CI.
+`readOnly:true` is enforced only through the provided facade; in-process extensions
+remain administrator-reviewed, trusted Node.js code, not sandboxed.

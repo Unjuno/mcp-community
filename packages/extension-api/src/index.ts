@@ -37,6 +37,7 @@ export interface ExtensionTool<
   readonly name: string;
   readonly description: string;
   readonly requiredScope: string;
+  /** Rejects mutations through the public service facade when true; not a sandbox. */
   readonly readOnly: boolean;
   readonly inputSchema: I;
   readonly outputSchema: O;

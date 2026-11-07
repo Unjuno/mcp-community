@@ -75,19 +75,31 @@ export class ExtensionRegistry {
           const execute: RegisteredTool['execute'] = async (input, principal) => {
             const actor = this.rt.require(principal, tool.requiredScope);
             if (!tool.readOnly) this.rt.writeRate(actor.id);
+            // MCP readOnlyHint must match the behavior of the public service facade.
+            // Trusted in-process JS is not sandboxed; this guards the documented API only.
+            const mutate = (fn: () => unknown): unknown => {
+              if (tool.readOnly)
+                throw new AppError(
+                  403,
+                  'EXTENSION_READ_ONLY',
+                  'Read-only extension tools cannot mutate community state',
+                );
+              return fn();
+            };
             const ctx: ExtensionExecutionContext = Object.freeze({
               actor: Object.freeze({ id: actor.id, kind: actor.kind, name: actor.name }),
               config,
               forum: Object.freeze({
                 listThreads: (data?: unknown) => this.forum.listThreads(principal, data),
                 getThread: (data: unknown) => this.forum.getThread(principal, data),
-                createThread: (data: unknown) => this.forum.createThread(principal, data),
-                reply: (data: unknown) => this.forum.reply(principal, data),
+                createThread: (data: unknown) =>
+                  mutate(() => this.forum.createThread(principal, data)),
+                reply: (data: unknown) => mutate(() => this.forum.reply(principal, data)),
               }),
               knowledge: Object.freeze({
                 list: (data?: unknown) => this.knowledge.list(principal, data),
                 get: (data: unknown) => this.knowledge.get(principal, data),
-                propose: (data: unknown) => this.knowledge.propose(principal, data),
+                propose: (data: unknown) => mutate(() => this.knowledge.propose(principal, data)),
               }),
             });
             const parsed = tool.inputSchema.parse(input);

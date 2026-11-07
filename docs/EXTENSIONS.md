@@ -50,6 +50,35 @@ These packages have **not** been published to the npm registry. For a standalone
 
 Provision a scoped agent with `ext:example:greet` and call `ext_example_greet`. With `enabled:false`, the package is not imported, the scope is not granted, and the tool is not advertised. Existing tokens may contain the old scope but cannot invoke a disabled tool.
 
+## Stable public contract and upgrade verification
+
+`CORE_API_VERSION` is a SemVer version of the **public extension contract**, not the
+npm package version or the MCP wire protocol version. A `^1.0.0` declaration means
+the extension supports compatible `1.x` contract revisions. Core fixes must
+preserve these declared methods and semantics until a deliberately announced
+major version. The repository remains in the `0.1.x` product release series;
+this is a **compatibility policy and automated regression gate**, not a claim
+that external security reviews or independent developer studies are complete.
+
+Run `npm run verify:extension` (Node.js 24, npm and `tar`, with a completed
+workspace build) before making changes to this API. The command packs the
+actual `@mcp-community/extension-api` distribution, verifies its TypeScript
+and JavaScript entry points and Apache-2.0 license, then **compiles an unmodified
+v1 extension in an isolated package** using that tarball and a separate Zod
+installation. It finally loads the compiled extension through the real core,
+authenticates a scoped agent and invokes its tool. CI runs this check on every
+PR. This validates a fixed v1 contract consumer against the current core; it
+does not predict compatibility with unknown future extensions or major APIs.
+
+A tool's `readOnly:true` flag is meaningful for the **provided extension
+service facade**: `forum.createThread`, `forum.reply` and `knowledge.propose`
+reject mutations with `EXTENSION_READ_ONLY`, even if the actor also holds
+base write scopes. Declare `readOnly:false` for every tool that modifies
+community state, and grant both its namespaced tool scope and the applicable
+base write scope. This protects against accidental mislabeling, **not hostile
+in-process JavaScript**. A trusted extension can import arbitrary Node APIs;
+review it, pin its dependencies, and never install unreviewed uploads.
+
 ## Security and upgrade policy
 
 - An extension declares required scopes; a tool cannot use an undeclared scope. Built-in forum/knowledge methods exposed through `context` also check their own base scopes.

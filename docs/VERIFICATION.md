@@ -21,6 +21,22 @@ The additive state-machine review commit `183edeb8c9752f9f0a7ab5c6878df061cd14c0
 
 The standalone local review run observed typecheck, lint and the 13 new transition tests passing, but full local Vitest execution was interrupted by the local sandbox; the complete 62-test result above is verified in CI, not misattributed to local execution. The Docker test environment was ephemeral and cleaned after the job. See [State machines](STATE_MACHINES.md) and [Architecture review](ARCHITECTURE_REVIEW.md).
 
+### Extension API compatibility gate (2026-11-08)
+
+Node.js 24.22.2 / Linux x64: full TypeScript build and test typecheck PASS;
+Biome PASS; **64/64 Vitest tests across 9 files PASS**; compiled server/MCP
+smoke PASS. A previously missing Apache-2.0 LICENSE in `npm pack --workspace
+@mcp-community/extension-api` was reproduced as a failing artifact check and
+corrected. `npm run verify:extension` now PASS: inspected packed JS/TypeScript
+and LICENSE, built a separate frozen v1 extension with its own Zod package, then
+registered/invoked it via the current core with scoped credentials.
+
+Two new regression tests confirmed that a read-only tool cannot mutate through
+the forum/knowledge facades even if its actor has write scopes, while a declared
+writable tool still works. The first test failed before the patch and passed
+afterwards. A clean GitHub CI result for this change must be recorded separately;
+local success is not equivalent to CI success.
+
 ## Not performed / limitations
 
 - Headless Chromium navigation was attempted but blocked with `ERR_BLOCKED_BY_ADMINISTRATOR` by the development environment. No successful visual/browser usability verification is claimed. Browser-form behavior is covered by HTTP integration tests.

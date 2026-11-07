@@ -86,6 +86,16 @@ stateDiagram-v2
 
 `Not configured → Configured/disabled → Configured/enabled → Loaded (restart required)` is a **deployment state**, not a mutable Web/MCP resource. Disabled packages are not imported. Enabled packages must have valid manifests, core-API compatibility, declared scopes, typed schemas and reviewed code. Invalid modules fail startup; there is no partial registration on a live process. Tool execution still rechecks the credential and declared scope.
 
+Extension tools additionally have an **operation classification** at invocation:
+`readOnly:true` permits facade reads, but `forum.createThread`, `forum.reply` and
+`knowledge.propose` reject with `EXTENSION_READ_ONLY` (403), even if the actor has
+base write scopes. `readOnly:false` permits the facade to invoke writes **only**
+when ordinary base scopes also authorize them. This prevents an accidentally
+misdeclared tool from changing state through the documented API. It cannot
+prevent arbitrary side effects from trusted JavaScript importing Node APIs.
+The v1 contract is exercised from an independently compiled, packed-package
+fixture in CI (`npm run verify:extension`) to detect breaking interface changes.
+
 Extensions execute in the Node.js process and are **trusted code, not sandboxed**. Never permit remote plugin uploads. Previously issued credentials with an extension scope may regain that scope if the module is later re-enabled: revoke credentials during a security incident before re-enabling; automated generation-bound scope invalidation is future work.
 
 ## 6. Event outbox lifecycle — currently intentionally incomplete
@@ -108,6 +118,8 @@ Current important event types: `forum.updated`, `forum.moderated`, `proposal.cre
 | Repeated moderation of same state               | No duplicate audit/event                               | `state-transitions.test.ts`                   |
 | UI navigation and review status                 | Skip link, active section, conflict indicator          | `web.test.ts` and `state-transitions.test.ts` |
 | MCP projected state matches Web projected state | `proposals_list` shows conflicted while status pending | `state-transitions.test.ts`                   |
+| Read-only extension facade attempts write       | Reject 403 before creating a forum thread or proposal  | `extensions.test.ts`                          |
+| Public API package upgrades break v1 fixture    | Fail independent package compile/invocation CI gate    | `verify:extension`                            |
 
 **Execution assumptions:** Node.js 24.22.2, Linux x64, `better-sqlite3` native ABI matching Node 24, SQLite WAL, official MCP SDK 2.4.0, one server process. All benchmark/latency claims are **out of scope**; no throughput value has been measured.
 

@@ -38,3 +38,13 @@ The local tests exercise XSS, CSRF, host/origin, invalid/revoked/out-of-scope to
 ## Security review additions
 
 Password reset revokes existing sessions, and login rechecks the persisted password hash after asynchronous verification to reject a password invalidated concurrently. Disabled humans and their agents cannot authenticate. The HTTP adapter also limits invalid MCP authentication attempts before entering the SDK; socket-derived peer addresses are used rather than spoofable forwarded headers. Resource read/discovery callbacks replace unexpected backend exceptions with a generic error, matching the secrecy boundary already used for tools. These cases have explicit regression tests.
+
+## Extension read-only contract (2026-11-08)
+
+The extension registry enforces `readOnly:true` for mutation methods exposed by
+`ExtensionExecutionContext` (`forum.createThread`, `forum.reply`, and
+`knowledge.propose`). Declaring `readOnly:false` does not bypass base scopes:
+every inner service still invokes `Runtime.require`. The new check prevents
+accidental misrepresentation of MCP Tool annotations, not side effects via
+raw Node imports, HTTP clients or direct database handles. All installed
+third-party code remains trusted process code and requires administrator review.

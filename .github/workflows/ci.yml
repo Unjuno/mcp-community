@@ -24,6 +24,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run verify:extension
       - run: npm run smoke
       - run: npm audit --audit-level=high
       - run: docker compose build

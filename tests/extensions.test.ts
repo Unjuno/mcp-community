@@ -139,6 +139,121 @@ describe('extension API contracts', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  it('blocks read-only extensions from mutating community services even with write scopes', async () => {
+    const f = await fixture();
+    fixtures.push(f);
+    const admin = { actorId: f.admin.id, scopes: [], channel: 'cli' as const };
+    const testExtension: CommunityExtension = {
+      manifest: {
+        id: 'readonly',
+        name: 'Read-only guard regression',
+        version: '1.0.0',
+        coreApi: '^1.0.0',
+        permissions: ['ext:readonly:thread', 'ext:readonly:proposal'],
+      },
+      register(registry) {
+        registry.registerTool({
+          name: 'thread',
+          description: 'Read-only tool attempting to create a thread',
+          requiredScope: 'ext:readonly:thread',
+          readOnly: true,
+          inputSchema: z.strictObject({}),
+          outputSchema: z.strictObject({ done: z.boolean() }),
+          execute(_input, context) {
+            context.forum.createThread({ title: 'Should not exist', body: 'No mutation allowed' });
+            return { done: true };
+          },
+        });
+        registry.registerTool({
+          name: 'proposal',
+          description: 'Read-only tool attempting to propose knowledge',
+          requiredScope: 'ext:readonly:proposal',
+          readOnly: true,
+          inputSchema: z.strictObject({}),
+          outputSchema: z.strictObject({ done: z.boolean() }),
+          execute(_input, context) {
+            context.knowledge.propose({
+              id: 'readonly-check',
+              baseRevision: 1,
+              title: 'Changed title',
+              body: 'Should not be proposed',
+              sources: [],
+            });
+            return { done: true };
+          },
+        });
+      },
+    };
+    const core = new Community(f.db, { extensions: [{ extension: testExtension, config: {} }] });
+    core.knowledge.create(admin, {
+      id: 'readonly-check',
+      title: 'Original title',
+      body: 'Original content',
+      sources: [],
+    });
+    const agent = core.identity.createAgent(admin, {
+      name: 'Read-only extension actor',
+      scopes: [
+        'ext:readonly:thread',
+        'ext:readonly:proposal',
+        'forum:write',
+        'forum:read',
+        'knowledge:propose',
+        'knowledge:read',
+      ],
+    });
+    const principal = core.identity.authenticateToken(agent.token);
+    for (const name of ['ext_readonly_thread', 'ext_readonly_proposal']) {
+      await expect(core.extensions.tool(name)?.execute({}, principal)).rejects.toMatchObject({
+        status: 403,
+        code: 'EXTENSION_READ_ONLY',
+      });
+    }
+    expect(core.forum.listThreads(principal).items).toEqual([]);
+    expect(core.knowledge.listProposals(admin).items).toEqual([]);
+  });
+
+  it('still allows explicitly writable extension tools to use the authorized forum facade', async () => {
+    const f = await fixture();
+    fixtures.push(f);
+    const writerExtension: CommunityExtension = {
+      manifest: {
+        id: 'writer',
+        name: 'Scoped write tool',
+        version: '1.0.0',
+        coreApi: '^1.0.0',
+        permissions: ['ext:writer:create'],
+      },
+      register(registry) {
+        registry.registerTool({
+          name: 'create',
+          description: 'Create a discussion',
+          requiredScope: 'ext:writer:create',
+          readOnly: false,
+          inputSchema: z.strictObject({}),
+          outputSchema: z.strictObject({ done: z.boolean() }),
+          execute(_input, context) {
+            context.forum.createThread({ title: 'Extension topic', body: 'Content' });
+            return { done: true };
+          },
+        });
+      },
+    };
+    const core = new Community(f.db, { extensions: [{ extension: writerExtension, config: {} }] });
+    const admin = { actorId: f.admin.id, scopes: [], channel: 'cli' as const };
+    const agent = core.identity.createAgent(admin, {
+      name: 'Writable extension actor',
+      scopes: ['ext:writer:create', 'forum:write', 'forum:read'],
+    });
+    const principal = core.identity.authenticateToken(agent.token);
+    await expect(
+      core.extensions.tool('ext_writer_create')?.execute({}, principal),
+    ).resolves.toEqual({
+      done: true,
+    });
+    expect(core.forum.listThreads(principal).items).toHaveLength(1);
+  });
+
   it('advertises the extension to a scoped real MCP client and hides it when disabled', async () => {
     const f = await fixture();
     fixtures.push(f);

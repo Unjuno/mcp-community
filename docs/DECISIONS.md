@@ -51,3 +51,18 @@ Actor disablement is reversible for recovery. Credentials are _not_: disabling a
 ## ADR-013: Forum root moderation and state-aware SSR
 
 A thread's opening post must remain visible when its thread is visible. Reject separate hiding of its opening post; instead let the moderator hide the thread, with Web guidance. Repeated moderation of the same state is a no-op. For UX, retain Hono JSX SSR and adopt semantic status labels, active navigation, keyboard skip link and readable CSS variables; do not introduce Astro or an SPA. A future PostgreSQL adapter must replace SQLite `rowid` ordering with an explicit stable field.
+
+## ADR-014: Public extension compatibility and read-only operation contracts
+
+Preserve the existing API 1.x extension surface independently of the 0.1.x product/package
+version. CI must pack the real distributable, check the full Apache-2.0 license
+and compile/run a frozen external API v1 fixture against it. Pin the fixture's
+source rather than silently adapting it whenever the core changes; an intentional
+breaking API change requires a new major contract and explicit migration plan.
+
+Within the public capability facade, a tool declaring `readOnly:true` must
+never write threads, replies or knowledge proposals, regardless of its actor's
+base write scopes. Reject the attempted transition with `EXTENSION_READ_ONLY`.
+This does **not** sandbox trusted in-process Node modules, so reviewing enabled
+extensions is still mandatory. Rejected alternative: claim that MCP read-only
+annotations alone enforce side-effect freedom.
