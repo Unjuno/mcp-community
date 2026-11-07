@@ -13,10 +13,12 @@ export const paginationSchema = z.strictObject({
 export const createThreadSchema = z.strictObject({
   title: z.string().trim().min(1).max(160),
   body: z.string().trim().min(1).max(20000),
+  idempotencyKey: z.uuid().optional(),
 });
 export const replySchema = z.strictObject({
   threadId: z.uuid(),
   body: z.string().trim().min(1).max(20000),
+  idempotencyKey: z.uuid().optional(),
 });
 export const getThreadSchema = paginationSchema.extend({ id: z.uuid() });
 const threadFields = {
@@ -85,52 +87,48 @@ export class Forum {
     const actor = this.rt.require(principal, 'forum:write');
     const data = parse(createThreadSchema, input);
     this.rt.writeRate(actor.id);
-    return this.rt.db.sqlite
-      .transaction(() => {
-        const id = randomUUID();
-        const createdAt = this.rt.timestamp();
-        this.rt.db.orm
-          .insert(threads)
-          .values({ id, title: data.title, actorId: actor.id, createdAt, bumpedAt: createdAt })
-          .run();
-        this.rt.db.orm
-          .insert(posts)
-          .values({ id: randomUUID(), threadId: id, actorId: actor.id, body: data.body, createdAt })
-          .run();
-        this.rt.audit(actor.id, 'forum.create_thread', id);
-        this.rt.event('forum.updated', id);
-        return { id, actorId: actor.id };
-      })
-      .immediate();
+    return this.rt.idempotently(actor.id, 'forum.create_thread', data.idempotencyKey, data, () => {
+      const id = randomUUID();
+      const createdAt = this.rt.timestamp();
+      this.rt.db.orm
+        .insert(threads)
+        .values({ id, title: data.title, actorId: actor.id, createdAt, bumpedAt: createdAt })
+        .run();
+      this.rt.db.orm
+        .insert(posts)
+        .values({ id: randomUUID(), threadId: id, actorId: actor.id, body: data.body, createdAt })
+        .run();
+      this.rt.audit(actor.id, 'forum.create_thread', id);
+      this.rt.event('forum.updated', id);
+      return { id, actorId: actor.id };
+    });
   }
   reply(principal: Principal | null, input: unknown) {
     const actor = this.rt.require(principal, 'forum:write');
     const data = parse(replySchema, input);
     this.rt.writeRate(actor.id);
-    return this.rt.db.sqlite
-      .transaction(() => {
-        const thread = this.rt.db.orm
-          .select()
-          .from(threads)
-          .where(and(eq(threads.id, data.threadId), eq(threads.hidden, false)))
-          .get();
-        if (!thread) notFound();
-        const id = randomUUID();
-        const createdAt = this.rt.timestamp();
-        this.rt.db.orm
-          .insert(posts)
-          .values({ id, threadId: data.threadId, actorId: actor.id, body: data.body, createdAt })
-          .run();
-        this.rt.db.orm
-          .update(threads)
-          .set({ bumpedAt: createdAt })
-          .where(eq(threads.id, data.threadId))
-          .run();
-        this.rt.audit(actor.id, 'forum.reply', id);
-        this.rt.event('forum.updated', data.threadId);
-        return { id, actorId: actor.id };
-      })
-      .immediate();
+    return this.rt.idempotently(actor.id, 'forum.reply', data.idempotencyKey, data, () => {
+      const thread = this.rt.db.orm
+        .select()
+        .from(threads)
+        .where(and(eq(threads.id, data.threadId), eq(threads.hidden, false)))
+        .get();
+      if (!thread) notFound();
+      const id = randomUUID();
+      const createdAt = this.rt.timestamp();
+      this.rt.db.orm
+        .insert(posts)
+        .values({ id, threadId: data.threadId, actorId: actor.id, body: data.body, createdAt })
+        .run();
+      this.rt.db.orm
+        .update(threads)
+        .set({ bumpedAt: createdAt })
+        .where(eq(threads.id, data.threadId))
+        .run();
+      this.rt.audit(actor.id, 'forum.reply', id);
+      this.rt.event('forum.updated', data.threadId);
+      return { id, actorId: actor.id };
+    });
   }
   moderate(principal: Principal | null, input: unknown) {
     const admin = this.rt.admin(principal);

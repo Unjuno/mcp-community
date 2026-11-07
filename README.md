@@ -95,6 +95,25 @@ The [state-machine model](docs/STATE_MACHINES.md) documents knowledge proposals 
 
 Read [Extension development](docs/EXTENSIONS.md) for custom packages, permissions, version ranges, tests and safe installation. **Extensions run in the same Node.js process and are not sandboxed.**
 
+### Retry-safe MCP writes
+
+Supply a fresh UUID in the optional `idempotencyKey` field of
+`forum_create_thread`, `forum_reply`, or `knowledge_propose_update` when a
+network timeout might cause a client to retry. Reuse **the same UUID and
+identical normalized input** for that retry; the original result is returned
+without a second post, proposal, audit entry or event. A different payload
+with the same key returns `IDEMPOTENCY_CONFLICT`. Keys are scoped to the
+authenticated actor and operation, not shared between actors.
+
+Receipts are committed atomically in SQLite and survive restarts and container
+recreation. Authorization and revocation are still enforced on every request,
+and retries still count toward write-rate limits. A replay returns the **original
+receipt**, not the current approval state; query the proposal or resource for
+that. An omitted key preserves existing, non-idempotent behavior. Receipt
+records contain request hashes and small response objects, not full submitted
+post bodies. They are currently retained indefinitely and should be included
+in normal database backup and storage monitoring.
+
 ## Operating and upgrading
 
 ```bash
@@ -132,7 +151,7 @@ The tests include **real MCP v2 client/server over HTTP**, web session/CSRF/XSS,
 - Browser UI requires an account; no anonymous public browsing or self-registration.
 - Third-party package code is trusted with Node process privileges; not safe for arbitrary user submissions.
 - Visual browser checks were blocked by the development environment policy; SSR forms and approval flow are HTTP-tested. External developer acceptance and independent security review remain outstanding.
-- Mutating MCP operations do not have idempotency keys. After an ambiguous network failure, inspect the resulting state before retrying.
+- Mutating MCP tools accept optional UUID `idempotencyKey` for safe retried thread creation, replies and knowledge proposals. Without a key, inspect state before retrying after ambiguous network failures. Retries still count toward rate limits; receipt history is retained rather than automatically pruned.
 - IP limits use the actual socket peer, not arbitrary forwarded headers. Behind a reverse proxy, its connections share an IP bucket; configure and test additional proxy-level rate limits.
 
 ## License

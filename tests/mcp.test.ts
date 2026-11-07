@@ -65,6 +65,59 @@ describe('official v2 MCP over a real TCP HTTP endpoint', () => {
     const read = await client.readResource({ uri: `community://threads/${id}` });
     expect(JSON.stringify(read)).toContain('Additional evidence');
   });
+  it('replays the same mutation receipt after an MCP transport retry', async () => {
+    const agent = f.core.identity.createAgent(f.adminContext, {
+      name: 'Retry agent',
+      scopes: ['forum:read', 'forum:write', 'knowledge:read', 'knowledge:propose'],
+    });
+    const client = await useClient(http.origin, agent.token);
+    const threadInput = {
+      title: 'Remote retry',
+      body: 'Only one initial post',
+      idempotencyKey: '123e4567-e89b-42d3-a456-426614174002',
+    };
+    const first = await client.callTool({ name: 'forum_create_thread', arguments: threadInput });
+    const second = await client.callTool({ name: 'forum_create_thread', arguments: threadInput });
+    expect(first.isError).not.toBe(true);
+    expect(second.structuredContent).toEqual(first.structuredContent);
+    const id = (first.structuredContent as { id: string }).id;
+    expect(f.core.forum.getThread(f.memberContext, { id }).posts).toHaveLength(1);
+    const collision = await client.callTool({
+      name: 'forum_create_thread',
+      arguments: { ...threadInput, body: 'Changed' },
+    });
+    expect(collision.isError).toBe(true);
+    expect(JSON.stringify(collision)).toContain('IDEMPOTENCY_CONFLICT');
+
+    f.core.knowledge.create(f.adminContext, {
+      id: 'remote-retry',
+      title: 'Initial',
+      body: 'Reviewed',
+      sources: [],
+    });
+    const proposalInput = {
+      id: 'remote-retry',
+      baseRevision: 1,
+      title: 'Improved',
+      body: 'Updated',
+      note: 'MCP replay test',
+      sources: [],
+      idempotencyKey: '123e4567-e89b-42d3-a456-426614174003',
+    };
+    const proposal = await client.callTool({
+      name: 'knowledge_propose_update',
+      arguments: proposalInput,
+    });
+    expect(proposal.isError).not.toBe(true);
+    f.core.knowledge.approve(f.adminContext, {
+      id: (proposal.structuredContent as { id: string }).id,
+    });
+    const replay = await client.callTool({
+      name: 'knowledge_propose_update',
+      arguments: proposalInput,
+    });
+    expect(replay.structuredContent).toEqual(proposal.structuredContent);
+  });
   it('rejects a write outside the token scope and malformed arguments', async () => {
     const agent = f.core.identity.createAgent(f.adminContext, { name: 'Reader' });
     const client = await useClient(http.origin, agent.token);

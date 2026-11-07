@@ -36,6 +36,27 @@ the forum/knowledge facades even if its actor has write scopes, while a declared
 writable tool still works. The first test failed before the patch and passed
 afterwards. [GitHub CI run 42400348840](https://github.com/Unjuno/mcp-community/actions/runs/42400348840) for commit `6cc8eab2`: **PASS** — clean `npm ci`, strict TypeScript typecheck, lint, all **64 tests**, independently compiled packed extension API contract check, compiled MCP smoke, online `npm audit --audit-level=high`, Docker image build, non-root container startup, health, migrations and authenticated MCP thread/reply persistence after container recreation. CI was ephemeral and cleaned its data volume. This is technical regression evidence, not an independent security certification.
 
+### Durable MCP mutation receipts (2026-11-08)
+
+Local Node.js **24.22.2**, Linux x64, SQLite driver 13.0.3:
+`npm run typecheck` PASS; `npm run lint` PASS without warnings;
+`npm test` **72/72 PASS across 10 files**;
+`npm run verify:extension` PASS (independently compiled frozen public API
+v1 extension); `npm run smoke` PASS (compiled server and official MCP client,
+extension invocation, SQLite backup/restore).
+
+New regression cases cover: repeated forum thread/reply or knowledge-proposal
+requests return the original result without duplicate data/audit/outbox;
+reusing a key with altered input fails with `IDEMPOTENCY_CONFLICT`; distinct
+actors or operations are independent; revoked credentials cannot replay;
+receipts survive a database close/reopen; a synthetic audit insert failure
+rolls back the mutation and receipt; a real MCP v2 client can retry both thread
+and proposal tools; a real v3 SQLite database upgrades to migration 4 while
+preserving existing records. All tests are automated, not simulated results.
+
+GitHub Actions validation of the new branch commit (including online dependency
+audit and Docker) is **PENDING** until an actual completed run is observed.
+
 ## Not performed / limitations
 
 - Headless Chromium navigation was attempted but blocked with `ERR_BLOCKED_BY_ADMINISTRATOR` by the development environment. No successful visual/browser usability verification is claimed. Browser-form behavior is covered by HTTP integration tests.

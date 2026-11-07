@@ -42,7 +42,39 @@ stateDiagram-v2
 - Revisions are immutable: SQLite triggers forbid `UPDATE` and `DELETE` on `knowledge_revisions`.
 - A restore appends a new revision with `restoredFrom` rather than modifying history.
 - Conflict detection guards the current pointer and revision insertion atomically; reject a stale publication with `REVISION_CONFLICT` (HTTP 409, MCP safe error).
-- Audit and event records are part of the same transaction. A successful reply to an API call is not a substitute for checking current revision after a network timeout; mutating MCP calls are not idempotency-keyed yet.
+- Audit and event records are part of the same transaction. For optional keyed writes, replays return the original receipt; without a key, clients must inspect state after ambiguous timeouts rather than resubmitting blindly.
+
+## 2a. Durable MCP mutation replay (migration 4)
+
+```mermaid
+stateDiagram-v2
+  [*] --> Absent: no receipt for key
+  Absent --> Committed: atomic mutation + receipt insert
+  Committed --> Committed: same request hash / replay original result
+  Committed --> Committed: different request hash / reject 409
+```
+
+`Replayed` and `Conflict` are **call outcomes**, not persisted receipt states.
+The only durable transition is `Absent -> Committed`, and a failed mutation
+rolls back to `Absent` without storing a receipt.
+
+- No key preserves the existing non-idempotent mutation behavior; existing MCP
+  and Web clients do not have to send one.
+- Key namespace is `(actor_id, operation, idempotency_key)`. The three
+  supported operations are thread creation, reply and knowledge proposal.
+- The request hash is computed over Zod-normalized data, so a changed payload
+  with the same key fails rather than returning unrelated results. The full
+  input body is not stored in the receipt.
+- A `BEGIN IMMEDIATE` SQLite transaction serializes key lookup, mutation,
+  audit/outbox and receipt insertion. Rollback removes all four together.
+- Authentication, authorization and rate limiting still apply **before**
+  replay. Revoked credentials cannot obtain stored receipts. Identical retries
+  consume write-rate quota; receipt storage survives service restarts.
+- Proposal replay returns the _original submission receipt_, including its
+  original status, even if a human has subsequently approved it. Use the
+  proposal/resource query to discover current state.
+- Migration 4 only adds a table with immutable records and does not modify
+  migrations 1-3. Receipts are not automatically pruned in this MVP.
 
 ## 3. Actor, session and credential lifecycle
 
@@ -123,7 +155,7 @@ Current important event types: `forum.updated`, `forum.moderated`, `proposal.cre
 
 **Execution assumptions:** Node.js 24.22.2, Linux x64, `better-sqlite3` native ABI matching Node 24, SQLite WAL, official MCP SDK 2.4.0, one server process. All benchmark/latency claims are **out of scope**; no throughput value has been measured.
 
-**H:** unauthorized or conflicting transitions cannot mutate authoritative state and every approved revision has a durable audit/event trail. **T:** automated service, DB, Web and real MCP integration tests, including migration from an old database. **D:** PASS only when every required test, typecheck and lint succeeds; otherwise FAIL or UNCERTAIN if execution is unavailable. **C:** risks include DB access outside the core, malicious trusted extensions and ambiguous retries after network failures. **U:** major uncertainty is in untested deployments, adversarial third-party code and long-lived operational behavior; no numeric combined standard uncertainty has been calculated without measured inputs.
+**H:** unauthorized or conflicting transitions cannot mutate authoritative state and every approved revision has a durable audit/event trail. **T:** automated service, DB, Web and real MCP integration tests, including migration from an old database. **D:** PASS only when every required test, typecheck and lint succeeds; otherwise FAIL or UNCERTAIN if execution is unavailable. **C:** risks include DB access outside the core, malicious trusted extensions and unkeyed ambiguous retries after network failures. **U:** major uncertainty is in untested deployments, adversarial third-party code and long-lived operational behavior; no numeric combined standard uncertainty has been calculated without measured inputs.
 
 ### Remaining limitations requiring explicit decisions
 

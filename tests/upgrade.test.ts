@@ -125,6 +125,57 @@ describe('backup, migration, core upgrade and extension compatibility', () => {
     }
   });
 
+  it('upgrades an existing v3 SQLite database without editing prior migrations', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mcc-v3-receipts-'));
+    const path = join(directory, 'before.sqlite');
+    const old = new BetterSqlite3(path);
+    const adminId = randomUUID();
+    const originalThread = randomUUID();
+    const now = new Date().toISOString();
+    try {
+      migrateDatabase(old, migrations.slice(0, 3));
+      old
+        .prepare(
+          "INSERT INTO actors(id,name,kind,role,disabled,created_at) VALUES(?,?,'human','admin',0,?)",
+        )
+        .run(adminId, 'Legacy admin', now);
+      old
+        .prepare(
+          'INSERT INTO threads(id,title,actor_id,hidden,created_at,bumped_at) VALUES(?,?,?,0,?,?)',
+        )
+        .run(originalThread, 'Before upgrade', adminId, now, now);
+      old
+        .prepare(
+          'INSERT INTO posts(id,thread_id,actor_id,body,hidden,created_at) VALUES(?,?,?,?,0,?)',
+        )
+        .run(randomUUID(), originalThread, adminId, 'Preserved message', now);
+    } finally {
+      old.close();
+    }
+    const current = openDatabase(path);
+    try {
+      const core = new Community(current);
+      const principal = { actorId: adminId, channel: 'cli' as const, scopes: [] };
+      expect(core.forum.getThread(principal, { id: originalThread }).posts[0]?.body).toBe(
+        'Preserved message',
+      );
+      const retriable = {
+        title: 'After upgrade',
+        body: 'New content',
+        idempotencyKey: '123e4567-e89b-42d3-a456-426614174004',
+      };
+      const created = core.forum.createThread(principal, retriable);
+      expect(core.forum.createThread(principal, retriable)).toEqual(created);
+      expect(current.sqlite.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({
+        n: migrations.length,
+      });
+      expect(current.sqlite.pragma('integrity_check', { simple: true })).toBe('ok');
+    } finally {
+      current.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('refuses modified or unknown historical migrations', () => {
     const db = openDatabase(':memory:');
     try {

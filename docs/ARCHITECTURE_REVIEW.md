@@ -44,7 +44,7 @@ Colors are defined as CSS custom properties, not user-configurable themes. Sampl
 
 ## Unresolved risks (deliberately outside this change)
 
-- Mutating MCP tools lack idempotency keys. Clients must inspect server state before retrying ambiguous failed requests.
+- Previously, mutating MCP tools lacked idempotency keys. Migration 4 adds opt-in atomic receipts for built-in forum and proposal writes; clients without a key still must inspect state before retrying.
 - No OAuth/OIDC flow; manually provisioned bearer headers are not universal client interoperability.
 - No trusted extension sandbox or signed registry; a malicious enabled extension has full Node process privileges.
 - No operator policy for personal-data removal from immutable records; define redaction, access and retention before broad public deployment.

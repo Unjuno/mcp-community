@@ -24,6 +24,7 @@ export const proposeKnowledgeSchema = z.strictObject({
   baseRevision: z.number().int().min(1),
   ...fields,
   note: z.string().trim().max(2000).default(''),
+  idempotencyKey: z.uuid().optional(),
 });
 export const proposalIdSchema = z.strictObject({
   id: z.uuid(),
@@ -177,51 +178,49 @@ export class Knowledge {
     const actor = this.rt.require(principal, 'knowledge:propose');
     const data = parse(proposeKnowledgeSchema, input);
     this.rt.writeRate(actor.id);
-    return this.rt.db.sqlite
-      .transaction(() => {
-        const resource = this.rt.db.orm
+    return this.rt.idempotently(actor.id, 'knowledge.propose', data.idempotencyKey, data, () => {
+      const resource = this.rt.db.orm
+        .select()
+        .from(knowledgeResources)
+        .where(eq(knowledgeResources.id, data.id))
+        .get();
+      if (!resource) notFound();
+      if (resource.currentRevision !== data.baseRevision)
+        throw new AppError(409, 'REVISION_CONFLICT', 'Knowledge changed since editing began');
+      // Foreign key enforces that a proposal's base revision actually exists.
+      if (
+        !this.rt.db.orm
           .select()
-          .from(knowledgeResources)
-          .where(eq(knowledgeResources.id, data.id))
-          .get();
-        if (!resource) notFound();
-        if (resource.currentRevision !== data.baseRevision)
-          throw new AppError(409, 'REVISION_CONFLICT', 'Knowledge changed since editing began');
-        // Foreign key enforces that a proposal's base revision actually exists.
-        if (
-          !this.rt.db.orm
-            .select()
-            .from(knowledgeRevisions)
-            .where(
-              and(
-                eq(knowledgeRevisions.resourceId, data.id),
-                eq(knowledgeRevisions.number, data.baseRevision),
-              ),
-            )
-            .get()
-        )
-          notFound();
-        const id = randomUUID();
-        this.rt.db.orm
-          .insert(proposals)
-          .values({
-            id,
-            resourceId: data.id,
-            baseRevision: data.baseRevision,
-            title: data.title,
-            body: data.body,
-            sources: data.sources,
-            note: data.note,
-            authorId: actor.id,
-            status: 'pending',
-            createdAt: this.rt.timestamp(),
-          })
-          .run();
-        this.rt.audit(actor.id, 'knowledge.propose', id, { resource: data.id });
-        this.rt.event('proposal.created', id);
-        return { id, status: 'pending' as const };
-      })
-      .immediate();
+          .from(knowledgeRevisions)
+          .where(
+            and(
+              eq(knowledgeRevisions.resourceId, data.id),
+              eq(knowledgeRevisions.number, data.baseRevision),
+            ),
+          )
+          .get()
+      )
+        notFound();
+      const id = randomUUID();
+      this.rt.db.orm
+        .insert(proposals)
+        .values({
+          id,
+          resourceId: data.id,
+          baseRevision: data.baseRevision,
+          title: data.title,
+          body: data.body,
+          sources: data.sources,
+          note: data.note,
+          authorId: actor.id,
+          status: 'pending',
+          createdAt: this.rt.timestamp(),
+        })
+        .run();
+      this.rt.audit(actor.id, 'knowledge.propose', id, { resource: data.id });
+      this.rt.event('proposal.created', id);
+      return { id, status: 'pending' as const };
+    });
   }
   listProposals(principal: Principal | null, input: unknown = {}) {
     this.rt.require(principal, 'proposals:read');

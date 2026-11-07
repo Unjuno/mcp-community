@@ -86,6 +86,21 @@ export const rateLimits = sqliteTable('rate_limits', {
   count: integer('count').notNull(),
   expiresAt: integer('expires_at').notNull(),
 });
+export const mutationReceipts = sqliteTable(
+  'mutation_receipts',
+  {
+    actorId: text('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    operation: text('operation').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    responseJson: text('response_json').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.actorId, t.operation, t.idempotencyKey] })],
+);
+
 export type Actor = typeof actors.$inferSelect;
 
 export const knowledgeResources = sqliteTable('knowledge_resources', {

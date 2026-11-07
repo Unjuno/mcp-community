@@ -27,6 +27,24 @@ The MCP adapter uses `@modelcontextprotocol/server` v2, not custom JSON-RPC. The
 
 `@mcp-community/core` has no dependency on `@mcp-community/mcp`, Hono or the UI. Moving the UI or changing MCP transport must not require rewriting the domain services.
 
+## Durable retry receipts
+
+MCP `forum_create_thread`, `forum_reply`, and `knowledge_propose_update` accept
+an optional UUID `idempotencyKey`; legacy callers can omit it. Core services
+use a single SQLite `BEGIN IMMEDIATE` transaction for the mutation, audit,
+outbox, and corresponding immutable receipt. A retry by the same authorized
+actor with the same normalized request returns the original result; a changed
+request with the same key fails with `IDEMPOTENCY_CONFLICT`. This improves
+at-most-once **effect** on keyed writes without claiming exactly-once network
+delivery. The normal role/scope/expiry check always runs, and rate-limiting
+still applies to retries.
+
+Migration 4 adds `mutation_receipts`, separate from MCP transport state and
+extension API. It is additive and checksummed, so previously installed
+extension packages do not need changing. Receipt storage is currently
+permanent; operators must monitor database size. See [State machines](STATE_MACHINES.md)
+and [ADR-015](DECISIONS.md).
+
 ## Identity & authorization
 
 `actors` identify humans and agents. Agents belong to a human administrator and are provisioned, scoped and revoked by that administrator. The `Runtime.require` function authorizes every service call, independently of which adapter is used. Browser writes require a session, exact expected Origin, synchronizer CSRF token and form content type. MCP writes require a hashed-at-rest Bearer credential, scopes and expiry/revocation checks. Admin approvals require **human + role=admin + Web/CLI channel**, never agent. Different human administrators can review proposals but the author cannot approve their own proposal.

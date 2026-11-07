@@ -1,12 +1,14 @@
+import { createHash } from 'node:crypto';
 import {
   actors,
   auditLogs,
   type Database,
+  mutationReceipts,
   outboxEvents,
   rateLimits,
   tokens,
 } from '@mcp-community/database';
-import { eq, lt } from 'drizzle-orm';
+import { and, eq, lt } from 'drizzle-orm';
 import { AppError } from './errors.js';
 import { credentialState } from './state-machines.js';
 import { BASE_SCOPES, type Principal } from './types.js';
@@ -98,6 +100,60 @@ export class Runtime {
       .immediate();
     if (!allowed) throw new AppError(429, 'RATE_LIMITED', 'Rate limit exceeded');
   }
+  /** Atomically associate a client retry key with one committed mutation result.
+   * Callers must authenticate and authorize before reaching this method. Retries
+   * still count toward request throttling at their service entry point.
+   */
+  idempotently<T>(
+    actorId: string,
+    operation: 'forum.create_thread' | 'forum.reply' | 'knowledge.propose',
+    idempotencyKey: string | undefined,
+    payload: unknown,
+    mutate: () => T,
+  ): T {
+    return this.db.sqlite
+      .transaction(() => {
+        if (idempotencyKey) {
+          const requestHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+          const existing = this.db.orm
+            .select()
+            .from(mutationReceipts)
+            .where(
+              and(
+                eq(mutationReceipts.actorId, actorId),
+                eq(mutationReceipts.operation, operation),
+                eq(mutationReceipts.idempotencyKey, idempotencyKey),
+              ),
+            )
+            .get();
+          if (existing) {
+            if (existing.requestHash !== requestHash)
+              throw new AppError(
+                409,
+                'IDEMPOTENCY_CONFLICT',
+                'Retry key was used with different input',
+              );
+            return JSON.parse(existing.responseJson) as T;
+          }
+          const result = mutate();
+          this.db.orm
+            .insert(mutationReceipts)
+            .values({
+              actorId,
+              operation,
+              idempotencyKey,
+              requestHash,
+              responseJson: JSON.stringify(result),
+              createdAt: this.timestamp(),
+            })
+            .run();
+          return result;
+        }
+        return mutate();
+      })
+      .immediate();
+  }
+
   writeRate(actorId: string) {
     this.rate(`write:${actorId}`, 30, 60000);
   }

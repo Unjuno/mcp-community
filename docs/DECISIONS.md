@@ -66,3 +66,22 @@ base write scopes. Reject the attempted transition with `EXTENSION_READ_ONLY`.
 This does **not** sandbox trusted in-process Node modules, so reviewing enabled
 extensions is still mandatory. Rejected alternative: claim that MCP read-only
 annotations alone enforce side-effect freedom.
+
+## ADR-015: Durable, optionally idempotent MCP mutations
+
+Client retries can duplicate posts or proposals when a remote MCP response is
+lost after SQLite commits. Add optional UUID `idempotencyKey` to the three
+built-in mutating MCP tools without changing required inputs or the extension
+API v1 contract. Migration 4 adds immutable `mutation_receipts` keyed by
+(actor, operation, key), storing a SHA-256 hash of the normalized request and
+the original, nonsecret result. A SQLite `BEGIN IMMEDIATE` transaction couples
+mutation, audit/outbox, and receipt insertion. Identical retries replay the
+receipt; changed requests with an existing key fail with `IDEMPOTENCY_CONFLICT`
+(409 at the core boundary). Authentication, authorization and rate limiting
+precede lookup: a revoked token cannot replay a receipt, and replays still
+consume the actor's write-rate quota. Web forms continue working without a key.
+
+Receipts are retained without automatic pruning for deterministic replay, at
+the cost of database growth. Future pruning must have an explicitly published
+retention window and may then permit duplicates after expiration; this MVP does
+not claim indefinite exactly-once delivery when clients omit keys.

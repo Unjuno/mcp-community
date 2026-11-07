@@ -34,3 +34,21 @@ MCP credentials are manually provisioned expiring scoped bearer tokens, not OAut
 Back up with the CLI before upgrading. SQLite migration 3 installs proposal transition guards without altering historical data. Approved/rejected proposals cannot be reopened by direct SQL; approval/rejection records require a reviewer and review timestamp. Old proposals whose base revision is outdated are shown as **Conflicted** in the Web UI/MCP, but their persisted `status` stays `pending` until a human administrator explicitly rejects them.
 
 Disabling an actor or resetting an owner's password now revokes the affected tokens, including those owned by that human's agents. Reactivation does **not** reactivate tokens: issue fresh agent tokens and distribute them securely. See [State machines](STATE_MACHINES.md) and test these transitions in staging before production use.
+
+## MCP mutation retry and schema upgrade (migration 4)
+
+Back up SQLite before upgrading. Migration 4 adds an immutable
+`mutation_receipts` table without changing old migration SQL or existing
+forum, user, proposal or extension data. Older MCP clients behave as before.
+For write calls susceptible to network timeouts, clients may send a fresh UUID
+`idempotencyKey` and repeat the **identical** request with that same key.
+A changed request using the same key is rejected; a replay returns the
+original operation result, not the latest proposal state. Always perform a
+separate read when the user needs the current status. A revoked credential
+cannot replay a previous result; retries count against the actor's rate limit.
+
+Receipts grow with unique keyed writes and are not automatically expired or
+pruned by this release. They contain SHA-256 request hashes and small
+response records, not the entire request body. Include them in the normal
+SQLite backup and monitor database size as deployments grow. Do not manually
+delete historical receipts while active clients may still retry those keys.

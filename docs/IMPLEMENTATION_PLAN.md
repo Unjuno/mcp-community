@@ -88,3 +88,20 @@ tarball instead of private core imports and has its own Zod installation. A
 future same-major core update that breaks its compile or invocation must fail CI.
 `readOnly:true` is enforced only through the provided facade; in-process extensions
 remain administrator-reviewed, trusted Node.js code, not sandboxed.
+
+## Retry-safe MCP writes — additive follow-up (2026-11-08)
+
+- [x] Reproduce the absence of retry keys with five failing Vitest tests.
+- [x] Add optional UUID retry keys to three built-in write tool schemas, without changing the v1 extension API.
+- [x] Add checksummed migration 4 with immutable actor/operation/key receipts.
+- [x] Implement atomic lookup, mutation, audit/outbox and receipt insertion under SQLite `BEGIN IMMEDIATE`.
+- [x] Test identical replay, payload collisions, actor/operation isolation, revoked token rejection, and restart durability.
+- [x] Verify a real official MCP client can repeat thread/proposal tools without duplicating state.
+- [x] Verify v3-to-v4 migration preserves old forum data and triggers new receipts.
+- [x] Inject an audit failure and verify no phantom mutation or receipt survives rollback.
+- [x] Locally verify full suite **72/72 across 10 files**, typecheck, lint, public v1 extension contract, and compiled MCP smoke (Node 24.22.2/Linux x64).
+- [ ] Verify GitHub CI including online dependency audit and live Docker container persistence on the new branch head.
+
+Receipt records are intentionally retained indefinitely. Existing unkeyed
+clients remain non-idempotent. Keyed retries are still throttled. No OAuth,
+distributed exactly-once guarantee, or external usability study is claimed.

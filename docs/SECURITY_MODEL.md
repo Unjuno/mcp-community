@@ -48,3 +48,15 @@ every inner service still invokes `Runtime.require`. The new check prevents
 accidental misrepresentation of MCP Tool annotations, not side effects via
 raw Node imports, HTTP clients or direct database handles. All installed
 third-party code remains trusted process code and requires administrator review.
+
+## MCP mutation replay and authorization
+
+Optional client-supplied UUID idempotency keys are persisted for forum thread
+creation, replies and knowledge proposals in checksummed migration 4. Receipts
+are scoped to the authenticated actor and operation, protected by the same
+scopes, revocation checks and rate limits as initial writes. Mismatched payload
+hashes fail; the database transaction prevents a success receipt without the
+associated write or vice versa. Input bodies are hashed, not stored in these
+receipts. Keys do not replace MCP authentication or protect arbitrary trusted
+third-party JavaScript. Receipts are retained until an explicit future
+retention policy is implemented.

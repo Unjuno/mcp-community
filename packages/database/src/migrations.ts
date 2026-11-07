@@ -75,6 +75,22 @@ WHEN NEW.status <> 'pending' OR NEW.reviewer_id IS NOT NULL OR NEW.reviewed_at I
 BEGIN SELECT RAISE(ABORT, 'New proposals must be pending'); END;
 `,
   },
+  {
+    id: 4,
+    sql: `
+CREATE TABLE mutation_receipts (
+ actor_id TEXT NOT NULL REFERENCES actors(id),
+ operation TEXT NOT NULL,
+ idempotency_key TEXT NOT NULL,
+ request_hash TEXT NOT NULL,
+ response_json TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(actor_id, operation, idempotency_key)
+);
+CREATE TRIGGER mutation_receipt_no_update BEFORE UPDATE ON mutation_receipts BEGIN SELECT RAISE(ABORT, 'Mutation receipts are immutable'); END;
+CREATE TRIGGER mutation_receipt_no_delete BEFORE DELETE ON mutation_receipts BEGIN SELECT RAISE(ABORT, 'Mutation receipts are immutable'); END;
+`,
+  },
 ];
 
 export function migrateDatabase(sqlite: BetterSqlite3.Database, selected = migrations): void {
