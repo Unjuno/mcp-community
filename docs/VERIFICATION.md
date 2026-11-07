@@ -34,8 +34,7 @@ registered/invoked it via the current core with scoped credentials.
 Two new regression tests confirmed that a read-only tool cannot mutate through
 the forum/knowledge facades even if its actor has write scopes, while a declared
 writable tool still works. The first test failed before the patch and passed
-afterwards. A clean GitHub CI result for this change must be recorded separately;
-local success is not equivalent to CI success.
+afterwards. [GitHub CI run 42400348840](https://github.com/Unjuno/mcp-community/actions/runs/42400348840) for commit `6cc8eab2`: **PASS** — clean `npm ci`, strict TypeScript typecheck, lint, all **64 tests**, independently compiled packed extension API contract check, compiled MCP smoke, online `npm audit --audit-level=high`, Docker image build, non-root container startup, health, migrations and authenticated MCP thread/reply persistence after container recreation. CI was ephemeral and cleaned its data volume. This is technical regression evidence, not an independent security certification.
 
 ## Not performed / limitations
 

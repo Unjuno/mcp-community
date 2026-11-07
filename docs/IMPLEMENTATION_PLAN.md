@@ -80,7 +80,7 @@ GitHub Actions confirmed **62/62 tests** across 9 files, Node 24 typecheck, Biom
 - [x] Add a packed-artifact + independently compiled v1 extension integration test.
 - [x] Include the contract test in the normal GitHub Actions CI gate.
 - [x] Locally verify the updated build, type checks, lint, 64 tests, independent contract and compiled MCP smoke.
-- [ ] Confirm a fresh clean GitHub CI run and its Docker/MCP/SQLite checks before final acceptance.
+- [x] Clean [GitHub CI run 42400348840](https://github.com/Unjuno/mcp-community/actions/runs/42400348840) PASS: Node 24 typecheck, lint, 64 tests, packed independent v1 extension, MCP smoke, high-severity dependency audit, Docker build/start and container-recreation SQLite persistence.
 - [ ] External developer usability study and independent security audit (not part of automated MVP).
 
 The public v1 fixture is intentionally outside the workspace, uses the published
