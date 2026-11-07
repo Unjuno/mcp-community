@@ -100,7 +100,7 @@ remain administrator-reviewed, trusted Node.js code, not sandboxed.
 - [x] Verify v3-to-v4 migration preserves old forum data and triggers new receipts.
 - [x] Inject an audit failure and verify no phantom mutation or receipt survives rollback.
 - [x] Locally verify full suite **72/72 across 10 files**, typecheck, lint, public v1 extension contract, and compiled MCP smoke (Node 24.22.2/Linux x64).
-- [ ] Verify GitHub CI including online dependency audit and live Docker container persistence on the new branch head.
+- [x] [GitHub CI run 42402490283](https://github.com/Unjuno/mcp-community/actions/runs/42402490283) PASS for `b5c58793`: 72 tests, extension contract, MCP smoke, audit, Docker build/start and persisted data on container recreation.
 
 Receipt records are intentionally retained indefinitely. Existing unkeyed
 clients remain non-idempotent. Keyed retries are still throttled. No OAuth,

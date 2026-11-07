@@ -54,8 +54,7 @@ rolls back the mutation and receipt; a real MCP v2 client can retry both thread
 and proposal tools; a real v3 SQLite database upgrades to migration 4 while
 preserving existing records. All tests are automated, not simulated results.
 
-GitHub Actions validation of the new branch commit (including online dependency
-audit and Docker) is **PENDING** until an actual completed run is observed.
+[GitHub Actions run 42402490283](https://github.com/Unjuno/mcp-community/actions/runs/42402490283) for commit `b5c58793` **PASS**: clean `npm ci`, strict typecheck, lint, **72/72 tests**, independently packed extension API contract check, compiled MCP smoke, online high-severity dependency audit, Docker Compose build, non-root container startup/health/migrations, and authenticated MCP forum write/reply persistence after container recreation. CI used an ephemeral container and removed the test volume. See this run for the exact verification record.
 
 ## Not performed / limitations
 
