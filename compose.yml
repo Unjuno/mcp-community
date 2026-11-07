@@ -1,0 +1,24 @@
+services:
+  community:
+    build: .
+    init: true
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 3000
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      DATABASE_PATH: /app/data/community.sqlite
+      EXTENSIONS_FILE: /app/community.extensions.json
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    volumes:
+      - community-data:/app/data
+      - ./community.extensions.json:/app/community.extensions.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  community-data:
